@@ -1,0 +1,36 @@
+/* main.css — Tailwind + CSS Custom Properties base */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /*
+   * Valores padrão (fallback). O useTheme.ts vai sobrescrever
+   * estas variáveis com as shades geradas dinamicamente.
+   * Formato: R G B (sem vírgula) para compatibilidade com
+   * a sintaxe rgb(var(--x) / alpha) do Tailwind v3.
+   */
+  :root {
+    --color-primary-50: 238 238 255;
+    --color-primary-100: 214 214 255;
+    --color-primary-200: 183 183 255;
+    --color-primary-300: 147 147 255;
+    --color-primary-400: 113 113 246;
+    --color-primary-500: 99 102 241; /* indigo-500 default */
+    --color-primary-600: 79 70 229;
+    --color-primary-700: 67 56 202;
+    --color-primary-800: 55 48 163;
+    --color-primary-900: 49 46 129;
+    --color-primary-950: 30 27 75;
+  }
+
+  /* Transição suave ao mudar de tema */
+  html {
+    @apply transition-colors duration-300;
+  }
+
+  body {
+    @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-50;
+  }
+}

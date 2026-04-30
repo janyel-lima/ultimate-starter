@@ -1,0 +1,47 @@
+{
+  "name": "Ultimate Starter — Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Vue.volar",
+        "Vue.vscode-typescript-vue-plugin",
+        "bradlc.vscode-tailwindcss",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "eamodio.gitlens",
+        "usernamehw.errorlens",
+        "ZixuanChen.vitest-explorer",
+        "ms-playwright.playwright",
+        "firebase.vscode-firebase-explorer"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "[vue]": {
+          "editor.defaultFormatter": "Vue.volar"
+        },
+        "vitest.enable": true,
+        "vitest.commandLine": "pnpm test:watch",
+        "typescript.preferences.importModuleSpecifier": "non-relative",
+        "eslint.useFlatConfig": true,
+        "playwright.reuseBrowser": true
+      }
+    }
+  },
+  "forwardPorts": [5173, 4173, 9099, 4000],
+  "portsAttributes": {
+    "5173": { "label": "Vite Dev Server", "onAutoForward": "openBrowser" },
+    "4173": { "label": "Vite Preview" },
+    "9099": { "label": "Firebase Auth Emulator" },
+    "4000": { "label": "Firebase Emulator UI" }
+  },
+  "postCreateCommand": "pnpm install && npx playwright install --with-deps chromium firefox",
+  "remoteUser": "node"
+}

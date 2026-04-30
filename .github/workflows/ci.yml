@@ -1,0 +1,111 @@
+# .github/workflows/ci.yml
+# Pipeline de qualidade executado em todo Pull Request.
+# Garante que nenhum código com lint errors, type errors,
+# ou testes quebrados entre na branch main.
+
+name: CI — Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    name: Lint + Type Check + Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type Check
+        run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format Check
+        run: pnpm format:check
+
+      - name: Unit Tests + Coverage
+        run: pnpm test:coverage
+
+      - name: Upload coverage to CI artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    # Roda em paralelo com o job "quality" para economizar tempo
+    needs: [] # sem dependência — falha rápido em ambos se necessário
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium firefox
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Start Firebase Auth Emulator (background)
+        run: firebase emulators:start --only auth &
+        env:
+          # Não precisa de credenciais reais para o emulator
+          FIREBASE_TOKEN: 'fake-token-for-emulator'
+
+      - name: Wait for emulator to be ready
+        run: npx wait-on http://localhost:9099 --timeout 30000
+
+      - name: Build app (aponta para o emulator)
+        env:
+          VITE_BASE_URL: /
+          VITE_USE_FIREBASE_EMULATOR: 'true'
+          VITE_FIREBASE_API_KEY: fake-key
+          VITE_FIREBASE_AUTH_DOMAIN: localhost
+          VITE_FIREBASE_PROJECT_ID: demo-test
+          VITE_FIREBASE_STORAGE_BUCKET: demo-test.appspot.com
+          VITE_FIREBASE_MESSAGING_SENDER_ID: '123456789'
+          VITE_FIREBASE_APP_ID: '1:123456789:web:abcdef'
+        run: pnpm build
+
+      - name: Run Playwright E2E tests
+        run: pnpm test:e2e
+        env:
+          VITE_USE_FIREBASE_EMULATOR: 'true'
+
+      - name: Upload Playwright report on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
