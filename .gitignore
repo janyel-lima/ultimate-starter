@@ -1,0 +1,10 @@
+node_modules
+.pnpm-store
+.agents
+dist
+coverage
+*.log
+.env
+.DS_Store
+.idea
+.vscode

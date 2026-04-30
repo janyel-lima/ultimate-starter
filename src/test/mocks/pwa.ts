@@ -1,8 +1,9 @@
 // src/test/mocks/pwa.ts
 // Mock do virtual module 'virtual:pwa-register/vue' gerado pelo vite-plugin-pwa.
 // No ambiente de teste (jsdom), o Service Worker não existe.
-// Este mock simula a API pública do useRegisterSW() com Refs estáticos.
+// FIX: adicionado import de vi (estava usando vi sem importar).
 
+import { vi } from 'vitest'
 import { ref } from 'vue'
 
 export function useRegisterSW() {

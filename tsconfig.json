@@ -14,14 +14,20 @@
     "noEmit": true,
     "jsx": "preserve",
 
-    /* Strict mode — obrigatório */
+    /* Adicione isso para suportar import.meta.env sem d.ts */
+    "types": [
+      "vite/client",
+      "vite-plugin-pwa/client",
+      "vite-plugin-pwa/vue" // Adicione este aqui para o suporte ao Vue
+    ],
+
+    /* Strict mode */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
-    /* Aliases */
-    "baseUrl": ".",
+    /* Aliases corrigidos (sem baseUrl) */
     "paths": {
       "@/*": ["./src/*"]
     }

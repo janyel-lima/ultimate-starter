@@ -1,21 +1,35 @@
 # .devcontainer/Dockerfile
-# Usamos a imagem oficial LTS do Node para garantir
-# compatibilidade com as versões dos pacotes do projeto.
-FROM node:20.24.0-bookworm-slim
+FROM node:20-bullseye-slim
 
-# Instala ferramentas de sistema úteis para desenvolvimento
-RUN apt-get update && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends \
+# 1. Instala ferramentas básicas e dependências do sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     bash \
+    ca-certificates \
+    wget \
+    && npx playwright install-deps \
     && rm -rf /var/lib/apt/lists/*
 
-# Instala pnpm globalmente (alternativa mais rápida ao npm)
-RUN npm install -g pnpm@9
+# 2. Instala o JDK 21 (Eclipse Temurin)
+# Baixamos o binário direto para garantir a versão 21+
+RUN mkdir -p /opt/java && \
+    wget -qO- https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jdk_x64_linux_hotspot_21.0.2_13.tar.gz | tar -xz -C /opt/java --strip-components=1
 
-# Define o diretório de trabalho padrão
+# Configura as variáveis de ambiente do Java
+ENV JAVA_HOME=/opt/java
+ENV PATH=$JAVA_HOME/bin:$PATH
+
+# 3. Instala a ULTIMA versão do pnpm e o firebase-tools
+# Usar @latest garante que você sempre terá a versão mais nova
+RUN npm install -g pnpm@latest firebase-tools
+
 WORKDIR /workspace
 
-# Expõe as portas usadas pelo Vite dev server
-EXPOSE 5173 4173
+# Portas: Vite + Firebase Emulators
+EXPOSE 5173 4173 4000 8080 9099 5001
+
+# 4. Ajuste de permissões
+RUN mkdir -p /workspace && chown -R node:node /workspace
+
+USER node

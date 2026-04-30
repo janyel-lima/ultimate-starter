@@ -3,16 +3,21 @@
 // DECISÃO DE ARQUITETURA — SDK Modular v9+:
 //
 // Usamos o tree-shakeable SDK modular ao invés do compat.
-// Cada função (signInWithEmailAndPassword, etc.) é importada
-// individualmente. Isso garante que o Vite/Rollup elimine do
-// bundle qualquer parte do SDK não utilizada.
+// Cada função é importada individualmente — o Vite/Rollup
+// elimina do bundle qualquer parte do SDK não utilizada.
 //
-// As credenciais vêm de import.meta.env.VITE_* — nunca
-// hardcodadas. Em produção, são injetadas pelo GitHub Actions.
+// ORDEM DE INICIALIZAÇÃO (crítica):
+//   1. initializeApp → cria o FirebaseApp
+//   2. getAuth(app)  → cria a instância de Auth
+//   3. connectAuthEmulator → deve vir DEPOIS de auth existir
+//
+// O bug original chamava connectAuthEmulator ANTES de auth
+// ser declarado e sem importá-lo. Corrigido abaixo.
 // ------------------------------------------------------------
 
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import {
+  connectAuthEmulator,
   createUserWithEmailAndPassword,
   getAuth,
   GoogleAuthProvider,
@@ -25,14 +30,6 @@ import {
   type UserCredential,
 } from 'firebase/auth'
 
-if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
-  connectAuthEmulator(auth, 'http://localhost:9099', {
-    // Desabilita o aviso de "não use em produção" no console
-    disableWarnings: false,
-  })
-  console.info('[Firebase] Conectado ao Auth Emulator em localhost:9099')
-}
-
 // Configuração lida do ambiente (injetado pelo Vite em build time)
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -43,13 +40,19 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-// Inicializa o Firebase App uma única vez (singleton)
+// 1. Inicializa o FirebaseApp (singleton)
 const app: FirebaseApp = initializeApp(firebaseConfig)
 
-// Instância de Auth exportada para uso nos stores
+// 2. Cria a instância de Auth
 export const auth: Auth = getAuth(app)
 
-// Provider do Google para login social
+// 3. Conecta ao emulator APENAS depois que auth existe
+if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
+  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: false })
+  console.info('[Firebase] Conectado ao Auth Emulator → http://localhost:9099')
+}
+
+// Google provider com prompt de seleção de conta sempre visível
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
@@ -72,14 +75,10 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * Retorna uma Promise que resolve com o usuário atual ou null.
- * Útil para aguardar a inicialização do Auth antes de checar a rota.
- *
- * DECISÃO DE ARQUITETURA:
- * O Firebase Auth é assíncrono na inicialização — onAuthStateChanged
- * não dispara imediatamente. Encapsulamos isso em uma Promise para que
- * o navigation guard do Vue Router possa aguardar o estado ser resolvido
- * antes de decidir redirecionar ou não.
+ * Promise que resolve com o usuário atual ou null.
+ * Aguarda o Firebase resolver o estado inicial de auth —
+ * essencial para o navigation guard não redirecionar
+ * antes da sessão ser confirmada.
  */
 export function getCurrentUser(): Promise<User | null> {
   return new Promise((resolve, reject) => {
@@ -94,5 +93,4 @@ export function getCurrentUser(): Promise<User | null> {
   })
 }
 
-// Re-exporta o tipo User para uso nos stores
 export type { User }

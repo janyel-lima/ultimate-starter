@@ -1,11 +1,14 @@
 // src/views/__tests__/LoginView.spec.ts
+// FIX: importava '../mocks/firebase' e '../utils' com caminhos errados.
+// Os arquivos reais estão em src/test/ — corrigido para '@/test/...'.
+
 import { useAuthStore } from '@/stores/auth'
+import '@/test/mocks/firebase'
+import { renderWithPlugins } from '@/test/utils'
 import LoginView from '@/views/LoginView.vue'
 import userEvent from '@testing-library/user-event'
 import { screen, waitFor } from '@testing-library/vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import '../mocks/firebase'
-import { renderWithPlugins } from '../utils'
 
 describe('LoginView', () => {
   const user = userEvent.setup()
@@ -14,7 +17,7 @@ describe('LoginView', () => {
     vi.clearAllMocks()
   })
 
-  // --- Renderização ---
+  // --- Renderização inicial ---
   describe('renderização inicial', () => {
     it('exibe o título e os campos do formulário', async () => {
       await renderWithPlugins(LoginView)
@@ -36,7 +39,7 @@ describe('LoginView', () => {
     })
   })
 
-  // --- Formulário de login ---
+  // --- Submissão do formulário ---
   describe('submissão do formulário', () => {
     it('chama store.loginEmail com email e senha corretos', async () => {
       await renderWithPlugins(LoginView)
@@ -51,11 +54,10 @@ describe('LoginView', () => {
       expect(loginSpy).toHaveBeenCalledWith('user@test.com', 'mypassword')
     })
 
-    it('exibe o spinner de loading durante a requisição', async () => {
+    it('botão de submit fica desabilitado durante o loading', async () => {
       await renderWithPlugins(LoginView)
 
       const authStore = useAuthStore()
-      // Mantém a promise pendente para capturar o loading state
       vi.spyOn(authStore, 'loginEmail').mockImplementation(() => new Promise(() => {}))
 
       await user.type(screen.getByLabelText('E-mail'), 'user@test.com')
@@ -70,7 +72,6 @@ describe('LoginView', () => {
 
       const authStore = useAuthStore()
       vi.spyOn(authStore, 'loginEmail').mockRejectedValue(new Error('auth/wrong-password'))
-      // Simula o store setando o error (normalmente feito dentro do action)
       authStore.$patch({ error: 'Senha incorreta.' })
 
       await user.type(screen.getByLabelText('E-mail'), 'user@test.com')
@@ -83,21 +84,46 @@ describe('LoginView', () => {
     })
   })
 
-  // --- Toggle de modo (Login / Cadastro) ---
-  describe('alternância de modo', () => {
-    it('muda para modo "Criar conta" ao clicar no link', async () => {
+  // --- Cadastro ---
+  describe('modo de cadastro', () => {
+    it('muda para modo "Criar conta" ao clicar no toggle', async () => {
       await renderWithPlugins(LoginView)
 
-      const toggleButton = screen.getByRole('button', { name: /criar conta/i })
-      await user.click(toggleButton)
+      await user.click(screen.getByTestId('toggle-auth-mode'))
 
-      expect(
-        screen.getByRole('button', { name: /criar conta/i, hidden: false })
-      ).toBeInTheDocument()
-      // O botão de submit deve mudar de texto
-      expect(
-        screen.getAllByRole('button').some((btn) => btn.textContent?.includes('Criar conta'))
-      ).toBe(true)
+      // O submit agora diz "Criar conta"
+      expect(screen.getByRole('button', { name: /criar conta/i })).toBeInTheDocument()
+    })
+
+    it('chama store.register (não registerWithEmail direto) ao criar conta', async () => {
+      await renderWithPlugins(LoginView)
+
+      const authStore = useAuthStore()
+      const registerSpy = vi.spyOn(authStore, 'register').mockResolvedValue()
+
+      await user.click(screen.getByTestId('toggle-auth-mode'))
+      await user.type(screen.getByLabelText('E-mail'), 'new@test.com')
+      await user.type(screen.getByLabelText('Senha'), 'StrongPass1!')
+      await user.click(screen.getByRole('button', { name: /criar conta/i }))
+
+      expect(registerSpy).toHaveBeenCalledWith('new@test.com', 'StrongPass1!')
+    })
+
+    it('exibe erro de email em uso ao cadastrar', async () => {
+      await renderWithPlugins(LoginView)
+
+      const authStore = useAuthStore()
+      vi.spyOn(authStore, 'register').mockRejectedValue(new Error('auth/email-already-in-use'))
+      authStore.$patch({ error: 'Este e-mail já está em uso.' })
+
+      await user.click(screen.getByTestId('toggle-auth-mode'))
+      await user.type(screen.getByLabelText('E-mail'), 'existing@test.com')
+      await user.type(screen.getByLabelText('Senha'), 'pass123')
+      await user.click(screen.getByRole('button', { name: /criar conta/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Este e-mail já está em uso.')).toBeInTheDocument()
+      })
     })
 
     it('limpa o error ao alternar o modo', async () => {
@@ -106,10 +132,8 @@ describe('LoginView', () => {
       const authStore = useAuthStore()
       authStore.$patch({ error: 'Erro anterior' })
 
-      const toggleButton = screen.getByRole('button', { name: /criar conta/i })
-      await user.click(toggleButton)
+      await user.click(screen.getByTestId('toggle-auth-mode'))
 
-      // clearError() deve ter sido chamado
       expect(authStore.error).toBeNull()
     })
   })
@@ -122,23 +146,28 @@ describe('LoginView', () => {
       const passwordInput = screen.getByLabelText('Senha')
       expect(passwordInput).toHaveAttribute('type', 'password')
 
-      // O botão de toggle não tem label visível, selecionamos pelo papel
-      const toggleBtn = screen.getByRole('button', {
-        name: (name) => name === '' || name.length === 0,
-      })
+      const toggleBtn = screen.getByLabelText('Mostrar senha')
       await user.click(toggleBtn)
 
       expect(passwordInput).toHaveAttribute('type', 'text')
+    })
+
+    it('volta a ocultar ao clicar novamente', async () => {
+      await renderWithPlugins(LoginView)
+
+      const toggleBtn = screen.getByLabelText('Mostrar senha')
+      await user.click(toggleBtn) // mostra
+      await user.click(screen.getByLabelText('Ocultar senha')) // oculta
+
+      expect(screen.getByLabelText('Senha')).toHaveAttribute('type', 'password')
     })
   })
 
   // --- Dark mode ---
   describe('botão de tema', () => {
-    it('renderiza o botão de toggle de tema', async () => {
+    it('renderiza o botão de toggle de tema com aria-label correto', async () => {
       await renderWithPlugins(LoginView)
-      // Botão tem aria-label dinâmico
-      const themeBtn = screen.getByRole('button', { name: /modo/i })
-      expect(themeBtn).toBeInTheDocument()
+      expect(screen.getByLabelText(/ativar modo/i)).toBeInTheDocument()
     })
   })
 })

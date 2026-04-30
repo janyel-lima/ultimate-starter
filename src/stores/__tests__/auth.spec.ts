@@ -1,12 +1,14 @@
 // src/stores/__tests__/auth.spec.ts
+// FIX: importava '../mocks/firebase' (src/stores/mocks/ — não existe).
+// Corrigido para '@/test/mocks/firebase' (caminho real do mock).
+
 import { useAuthStore } from '@/stores/auth'
+import '@/test/mocks/firebase' // ativa os vi.mock() necessários
+import { createMockCredential, mockUser } from '@/test/mocks/firebase'
 import { onAuthStateChanged } from 'firebase/auth'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import '../mocks/firebase' // ativa os vi.mock() necessários
-import { createMockCredential, mockUser } from '../mocks/firebase'
 
-// Acesso tipado ao mock do firebase/auth
 const mockOnAuthStateChanged = vi.mocked(onAuthStateChanged)
 
 describe('useAuthStore', () => {
@@ -33,10 +35,9 @@ describe('useAuthStore', () => {
   // --- init() ---
   describe('init()', () => {
     it('resolve a Promise quando onAuthStateChanged dispara com null', async () => {
-      // Simula Firebase sem usuário logado
       mockOnAuthStateChanged.mockImplementation((_auth, callback) => {
         callback(null)
-        return vi.fn() // unsubscribe
+        return vi.fn()
       })
 
       const store = useAuthStore()
@@ -74,23 +75,18 @@ describe('useAuthStore', () => {
       expect(store.error).toBeNull()
     })
 
-    it('define store.error quando o login falha', async () => {
+    it('define store.error quando o login falha com senha errada', async () => {
       const { loginWithEmail } = await import('@/services/firebase')
-      vi.mocked(loginWithEmail).mockRejectedValueOnce({
-        code: 'auth/wrong-password',
-      })
+      vi.mocked(loginWithEmail).mockRejectedValueOnce({ code: 'auth/wrong-password' })
 
       const store = useAuthStore()
-
       await expect(store.loginEmail('test@example.com', 'wrong')).rejects.toBeDefined()
       expect(store.error).toBe('Senha incorreta.')
     })
 
     it('mapeia código desconhecido para mensagem genérica', async () => {
       const { loginWithEmail } = await import('@/services/firebase')
-      vi.mocked(loginWithEmail).mockRejectedValueOnce({
-        code: 'auth/unknown-error-code',
-      })
+      vi.mocked(loginWithEmail).mockRejectedValueOnce({ code: 'auth/unknown-error-code' })
 
       const store = useAuthStore()
       await expect(store.loginEmail('a@b.com', 'pass')).rejects.toBeDefined()
@@ -115,13 +111,43 @@ describe('useAuthStore', () => {
 
     it('define error quando o popup é fechado pelo usuário', async () => {
       const { loginWithGoogle } = await import('@/services/firebase')
-      vi.mocked(loginWithGoogle).mockRejectedValueOnce({
-        code: 'auth/popup-closed-by-user',
-      })
+      vi.mocked(loginWithGoogle).mockRejectedValueOnce({ code: 'auth/popup-closed-by-user' })
 
       const store = useAuthStore()
       await expect(store.loginGoogle()).rejects.toBeDefined()
       expect(store.error).toBe('Login cancelado.')
+    })
+  })
+
+  // --- register() ---
+  describe('register()', () => {
+    it('chama registerWithEmail e limpa o error', async () => {
+      const { registerWithEmail } = await import('@/services/firebase')
+      vi.mocked(registerWithEmail).mockResolvedValueOnce(createMockCredential() as never)
+
+      const store = useAuthStore()
+      await store.register('new@test.com', 'StrongPass1!')
+
+      expect(registerWithEmail).toHaveBeenCalledWith('new@test.com', 'StrongPass1!')
+      expect(store.error).toBeNull()
+    })
+
+    it('define error quando o email já está em uso', async () => {
+      const { registerWithEmail } = await import('@/services/firebase')
+      vi.mocked(registerWithEmail).mockRejectedValueOnce({ code: 'auth/email-already-in-use' })
+
+      const store = useAuthStore()
+      await expect(store.register('existing@test.com', 'pass')).rejects.toBeDefined()
+      expect(store.error).toBe('Este e-mail já está em uso.')
+    })
+
+    it('define error para senha fraca', async () => {
+      const { registerWithEmail } = await import('@/services/firebase')
+      vi.mocked(registerWithEmail).mockRejectedValueOnce({ code: 'auth/weak-password' })
+
+      const store = useAuthStore()
+      await expect(store.register('a@b.com', '123')).rejects.toBeDefined()
+      expect(store.error).toBe('Senha fraca. Use ao menos 6 caracteres.')
     })
   })
 
@@ -146,9 +172,7 @@ describe('useAuthStore', () => {
     it('reseta o campo error para null', () => {
       const store = useAuthStore()
       store.$patch({ error: 'algum erro' })
-
       store.clearError()
-
       expect(store.error).toBeNull()
     })
   })

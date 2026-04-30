@@ -29,19 +29,32 @@
         },
         "vitest.enable": true,
         "vitest.commandLine": "pnpm test:watch",
-        "typescript.preferences.importModuleSpecifier": "non-relative",
+        "js/ts.preferences.importModuleSpecifier": "non-relative",
         "eslint.useFlatConfig": true,
-        "playwright.reuseBrowser": true
+        "playwright.reuseBrowser": true,
+        "tailwindCSS.experimental.classRegex": [["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*)[\"'`]"]]
       }
     }
   },
-  "forwardPorts": [5173, 4173, 9099, 4000],
+  // Adicionadas as portas 8080 (Firestore) e 5001 (Functions)
+  "forwardPorts": [5173, 4173, 9099, 8080, 5001, 4000],
   "portsAttributes": {
-    "5173": { "label": "Vite Dev Server", "onAutoForward": "openBrowser" },
+    "5173": {
+      "label": "Vite Dev Server",
+      "onAutoForward": "openBrowser",
+      "elevateIfNeeded": true
+    },
     "4173": { "label": "Vite Preview" },
-    "9099": { "label": "Firebase Auth Emulator" },
-    "4000": { "label": "Firebase Emulator UI" }
+    "4000": { "label": "Firebase Emulator UI" },
+    "9099": { "label": "Auth Emulator" },
+    "8080": { "label": "Firestore Emulator" }
   },
-  "postCreateCommand": "pnpm install && npx playwright install --with-deps chromium firefox",
-  "remoteUser": "node"
+  // Instala dependências e garante que o Playwright esteja pronto
+  "postCreateCommand": "pnpm install && npx playwright install chromium",
+
+  "remoteUser": "node",
+  "mounts": [
+    // Opcional: Persiste o cache do pnpm para rebuilds mais rápidos
+    "source=pnpm-cache,target=/home/node/.local/share/pnpm/store,type=volume"
+  ]
 }
