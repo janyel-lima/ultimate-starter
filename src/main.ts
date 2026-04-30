@@ -28,6 +28,7 @@ const initApp = async () => {
   } catch (error) {
     console.warn('[Main] O Auth não pôde ser inicializado a tempo ou falhou:', error)
     // O app continua a montagem mesmo assim para mostrar a UI
+    authStore.$patch({ loading: false })
   } finally {
     app.mount('#app')
     console.log('[Main] App montado com sucesso.')

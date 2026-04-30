@@ -16,8 +16,8 @@
 // de rotas (Vercel, Netlify), basta trocar para createWebHistory.
 // ------------------------------------------------------------
 
-import { useAuthStore } from '@/stores/auth';
-import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router';
+import { useAuthStore } from '@/stores/auth'
+import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -43,32 +43,29 @@ const routes: RouteRecordRaw[] = [
     path: '/:pathMatch(.*)*',
     redirect: '/login',
   },
-];
+]
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes,
   scrollBehavior: () => ({ top: 0 }),
-});
+})
 
 // --- Navigation Guard ---
-router.beforeEach(async to => {
-  const authStore = useAuthStore();
+router.beforeEach(async (to) => {
+  const authStore = useAuthStore()
 
-  // Aguarda o Firebase resolver o estado inicial de auth.
-  // Sem isso, o guard pode redirecionar antes do Firebase
-  // confirmar se há uma sessão ativa.
-  if (authStore.loading) {
-    await authStore.init();
-  }
+  // NÃO chama init() de novo — apenas espera se ainda está carregando
+  // O init() já foi chamado (e aguardado) em main.ts antes do mount
+  // Se loading ainda for true aqui, algo deu errado; prossiga como não autenticado
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return { name: 'login' };
+    return { name: 'login' }
   }
 
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
-    return { name: 'dashboard' };
+    return { name: 'dashboard' }
   }
-});
+})
 
-export default router;
+export default router
