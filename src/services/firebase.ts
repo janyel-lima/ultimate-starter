@@ -48,7 +48,7 @@ export const auth: Auth = getAuth(app)
 
 // 3. Conecta ao emulator APENAS depois que auth existe
 if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
-  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: false })
+  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
   console.info('[Firebase] Conectado ao Auth Emulator → http://localhost:9099')
 }
 
