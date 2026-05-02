@@ -2,6 +2,7 @@ node_modules
 .pnpm-store
 .agents
 dist
+dev-dist
 coverage
 *.log
 .env
