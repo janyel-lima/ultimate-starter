@@ -33,17 +33,18 @@ const year = new Date().getFullYear()
 </script>
 
 <template>
-    <footer class="relative z-30 flex items-center justify-between h-11 px-4
+    <footer class="relative z-20 flex items-center justify-between h-11 px-3 sm:px-4
          bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
          [box-shadow:0_-4px_20px_-4px_rgb(var(--color-primary-300)/30%)]
          dark:[box-shadow:0_-4px_20px_-4px_rgb(var(--color-primary-950)/70%)]">
 
         <!-- Left: copyright + version -->
-        <div class="flex items-center gap-3">
-            <span class="text-[11px] text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+        <div class="flex items-center gap-2 min-w-0">
+            <span
+                class="text-[10px] sm:text-[11px] truncate text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                 © {{ year }} {{ appName ?? 'Ultimate Starter' }}
             </span>
-            <span v-if="version" class="hidden sm:inline-flex px-1.5 py-0.5 rounded text-[10px] font-mono font-medium
+            <span v-if="version" class="hidden sm:inline-flex flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium
                        text-primary-600 dark:text-primary-400
                        bg-primary-50 dark:bg-primary-950/50">
                 {{ version }}
@@ -51,15 +52,16 @@ const year = new Date().getFullYear()
         </div>
 
         <!-- Center: status indicator -->
-        <div v-if="status" class="hidden md:flex items-center gap-1.5">
-            <span :class="['w-1.5 h-1.5 rounded-full', statusConfig[status].color]" />
-            <span class="text-[11px] text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+        <div v-if="status" class="hidden sm:flex items-center gap-1.5 flex-shrink-0">
+            <span :class="['w-1.5 h-1.5 rounded-full flex-shrink-0', statusConfig[status].color]" />
+            <span
+                class="text-[10px] sm:text-[11px] text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                 {{ statusConfig[status].label }}
             </span>
         </div>
 
         <!-- Right: social links -->
-        <div class="flex items-center gap-0.5">
+        <div class="flex items-center gap-0 flex-shrink-0">
             <a v-for="s in socials" :key="s.label" :href="s.href" :aria-label="s.label" target="_blank"
                 rel="noopener noreferrer" class="p-1.5 rounded-lg transition-colors
                      text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]

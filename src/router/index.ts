@@ -39,6 +39,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/suporte',
+    name: 'suporte',
+    component: () => import('@/views/SupportView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     // Catch-all: rota não encontrada
     path: '/:pathMatch(.*)*',
     redirect: '/login',

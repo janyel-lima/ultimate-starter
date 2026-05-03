@@ -25,7 +25,7 @@ const showColorPicker = ref(false)
 </script>
 
 <template>
-    <header class="relative z-30 flex items-center h-16 px-4 gap-3
+    <header class="relative z-20 flex items-center h-16 px-3 sm:px-4 gap-2 sm:gap-3
            bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
            [box-shadow:0_4px_20px_-4px_rgb(var(--color-primary-300)/35%)]
            dark:[box-shadow:0_4px_20px_-4px_rgb(var(--color-primary-950)/70%)]">
@@ -42,34 +42,34 @@ const showColorPicker = ref(false)
         </button>
 
         <!-- Breadcrumb / Title -->
-        <div class="flex items-center gap-1.5 flex-1 min-w-0">
+        <div class="flex items-center gap-1 sm:gap-1.5 flex-1 min-w-0">
             <template v-if="breadcrumb && breadcrumb.length > 1">
-                <span v-for="(crumb, i) in breadcrumb" :key="i" class="flex items-center gap-1.5">
+                <span v-for="(crumb, i) in breadcrumb" :key="i" class="flex items-center gap-1 sm:gap-1.5 min-w-0">
                     <span :class="[
-                        'text-sm truncate',
+                        'text-xs sm:text-sm truncate',
                         i === breadcrumb.length - 1
                             ? 'font-semibold text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]'
-                            : 'text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))] hover:text-[rgb(var(--text-heading))] dark:hover:text-[rgb(var(--dark-text-heading))] cursor-pointer transition-colors'
+                            : 'hidden sm:inline text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))] cursor-pointer transition-colors hover:text-[rgb(var(--text-heading))] dark:hover:text-[rgb(var(--dark-text-heading))]'
                     ]">{{ crumb }}</span>
                     <svg v-if="i < breadcrumb.length - 1"
-                        class="w-3.5 h-3.5 flex-shrink-0 text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]"
+                        class="hidden sm:block w-3 h-3 flex-shrink-0 text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]"
                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
                     </svg>
                 </span>
             </template>
-            <h1 v-else class="text-sm font-semibold truncate
+            <h1 v-else class="text-xs sm:text-sm font-semibold truncate
                  text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
                 {{ title ?? 'Dashboard' }}
             </h1>
         </div>
 
         <!-- Right actions -->
-        <div class="flex items-center gap-1 flex-shrink-0">
+        <div class="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
 
-            <!-- Search trigger -->
+            <!-- Search trigger — hidden on mobile -->
             <button
-                class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs transition-colors
+                class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs transition-colors
                  text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]
                  bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
                  hover:text-[rgb(var(--text-heading))] dark:hover:text-[rgb(var(--dark-text-heading))]
@@ -89,6 +89,18 @@ const showColorPicker = ref(false)
                 </kbd>
             </button>
 
+            <!-- Search icon only on sm -->
+            <button class="md:hidden p-2 rounded-xl transition-colors
+                 text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]
+                 hover:bg-[rgb(var(--bg-muted))] dark:hover:bg-[rgb(var(--dark-bg-muted))]
+                 hover:text-[rgb(var(--text-heading))] dark:hover:text-[rgb(var(--dark-text-heading))]"
+                @click="emit('search')">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </button>
+
             <!-- Notification bell -->
             <button class="relative p-2 rounded-xl transition-colors
                  text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]
@@ -103,7 +115,8 @@ const showColorPicker = ref(false)
             </button>
 
             <!-- Divider -->
-            <div class="w-px h-5 mx-1 bg-[rgb(var(--color-primary-100))] dark:bg-[rgb(var(--color-primary-900))]" />
+            <div
+                class="w-px h-5 mx-0.5 sm:mx-1 bg-[rgb(var(--color-primary-100))] dark:bg-[rgb(var(--color-primary-900))]" />
 
             <!-- Color picker -->
             <div class="relative">
@@ -116,7 +129,7 @@ const showColorPicker = ref(false)
                 </button>
 
                 <Transition name="fade">
-                    <div v-if="showColorPicker" v-click-outside="() => (showColorPicker = false)" class="absolute right-0 top-12 rounded-2xl p-4 z-50 w-52
+                    <div v-if="showColorPicker" v-click-outside="() => (showColorPicker = false)" class="absolute right-0 top-12 rounded-2xl p-4 z-50 w-48 sm:w-52
                            bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
                            [box-shadow:0_0_0_1px_rgb(var(--color-primary-100)),0_8px_32px_-4px_rgb(var(--color-primary-300)/40%)]
                            dark:[box-shadow:0_0_0_1px_rgb(var(--color-primary-900)),0_8px_32px_-4px_rgb(0_0_0/60%)]">
@@ -126,7 +139,8 @@ const showColorPicker = ref(false)
                         </p>
                         <div class="grid grid-cols-6 gap-2 mb-3">
                             <button v-for="color in presetColors" :key="color.value" data-testid="color-preset"
-                                class="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110" :style="{
+                                class="w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 transition-transform hover:scale-110"
+                                :style="{
                                     background: color.value,
                                     borderColor: primaryColor === color.value ? color.value : 'transparent',
                                     boxShadow: primaryColor === color.value
@@ -138,7 +152,7 @@ const showColorPicker = ref(false)
                               text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                             <span>Custom</span>
                             <input type="color" :value="primaryColor"
-                                class="h-7 w-14 rounded cursor-pointer border-0 p-0"
+                                class="h-7 w-12 sm:w-14 rounded cursor-pointer border-0 p-0"
                                 @input="setPrimaryColor(($event.target as HTMLInputElement).value)" />
                         </label>
                     </div>

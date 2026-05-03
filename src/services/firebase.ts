@@ -14,7 +14,6 @@
 // O bug original chamava connectAuthEmulator ANTES de auth
 // ser declarado e sem importá-lo. Corrigido abaixo.
 // ------------------------------------------------------------
-
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import {
   connectAuthEmulator,
@@ -29,6 +28,8 @@ import {
   type User,
   type UserCredential,
 } from 'firebase/auth'
+import { getFirestore } from 'firebase/firestore'
+import { getStorage } from 'firebase/storage'
 
 // Configuração lida do ambiente (injetado pelo Vite em build time)
 const firebaseConfig = {
@@ -93,4 +94,6 @@ export function getCurrentUser(): Promise<User | null> {
   })
 }
 
+export const db = getFirestore(app)
+export const storage = getStorage(app)
 export type { User }
