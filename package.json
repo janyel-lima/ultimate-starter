@@ -16,7 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "analyze": "vite build --mode analyze",
-    "emulator:start": "firebase emulators:start --only auth"
+    "emulator:start": "firebase emulators:start --only auth,firestore,storage,functions"
   },
   "dependencies": {
     "@vueuse/core": "^10.11.1",

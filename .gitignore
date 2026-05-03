@@ -1,13 +1,66 @@
+# ── Dependencies ──────────────────────────────────────────────
 node_modules
 .pnpm-store
-.agents
+.pnpm-debug.log
+
+# ── Build outputs ─────────────────────────────────────────────
 dist
 dev-dist
+functions/lib
+
+# ── Test & coverage ───────────────────────────────────────────
 coverage
-*.log
-.env
-.DS_Store
-.idea
-.vscode
 test-results
 playwright-report
+blob-report
+
+# ── Firebase ──────────────────────────────────────────────────
+.firebase
+.firebaserc.local
+firebase-debug.log
+firestore-debug.log
+storage-debug.log
+ui-debug.log
+functions-debug.log
+pubsub-debug.log
+database-debug.log
+
+# ── Environment & secrets ─────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+logs
+
+# ── OS ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editors ───────────────────────────────────────────────────
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── Vite & PWA ────────────────────────────────────────────────
+*.local
+dev-dist
+public/sw.js
+public/workbox-*.js
+public/sw.js.map
+public/workbox-*.js.map
+
+# ── TypeScript ────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ── Misc ──────────────────────────────────────────────────────
+.agents
+.cache
+.temp
+*.zip

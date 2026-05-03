@@ -2,6 +2,7 @@ import App from '@/App.vue'
 import '@/assets/main.css'
 import { clickOutside } from '@/directives/clickOutside'
 import router from '@/router'
+import { initErrorTracking } from '@/services/errorTracking'
 import { useAuthStore } from '@/stores/auth'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
@@ -15,7 +16,7 @@ const initApp = async () => {
 
   // Registra a diretiva global
   app.directive('click-outside', clickOutside)
-
+  initErrorTracking(app, router)
   const authStore = useAuthStore()
 
   try {

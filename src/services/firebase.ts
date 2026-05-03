@@ -8,11 +8,8 @@
 //
 // ORDEM DE INICIALIZAÇÃO (crítica):
 //   1. initializeApp → cria o FirebaseApp
-//   2. getAuth(app)  → cria a instância de Auth
-//   3. connectAuthEmulator → deve vir DEPOIS de auth existir
-//
-// O bug original chamava connectAuthEmulator ANTES de auth
-// ser declarado e sem importá-lo. Corrigido abaixo.
+//   2. getAuth(app) + getFirestore(app) + getStorage(app)
+//   3. connectXxxEmulator → deve vir DEPOIS das instâncias existirem
 // ------------------------------------------------------------
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import {
@@ -28,10 +25,9 @@ import {
   type User,
   type UserCredential,
 } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
-import { getStorage } from 'firebase/storage'
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore' // ← add
+import { connectStorageEmulator, getStorage } from 'firebase/storage' // ← add
 
-// Configuração lida do ambiente (injetado pelo Vite em build time)
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -41,16 +37,18 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-// 1. Inicializa o FirebaseApp (singleton)
 const app: FirebaseApp = initializeApp(firebaseConfig)
-
-// 2. Cria a instância de Auth
 export const auth: Auth = getAuth(app)
+export const db = getFirestore(app)
+export const storage = getStorage(app)
 
-// 3. Conecta ao emulator APENAS depois que auth existe
+// Conecta TODOS os serviços ao emulator de uma vez
 if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
-  console.info('[Firebase] Conectado ao Auth Emulator → http://localhost:9099')
+  connectFirestoreEmulator(db, 'localhost', 8080)
+  connectStorageEmulator(storage, 'localhost', 9199)
+
+  console.info('[Firebase] Emulators conectados → Auth:9099 | Firestore:8080 | Storage:9199')
 }
 
 // Google provider com prompt de seleção de conta sempre visível
@@ -94,6 +92,4 @@ export function getCurrentUser(): Promise<User | null> {
   })
 }
 
-export const db = getFirestore(app)
-export const storage = getStorage(app)
 export type { User }

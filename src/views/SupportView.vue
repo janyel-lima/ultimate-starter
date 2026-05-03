@@ -2,6 +2,9 @@
 import AppFooter from '@/components/layout/AppFooter.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
+import AppFileDropzone from '@/components/ui/AppFileDropzone.vue'
+import AppStatusBadge from '@/components/ui/AppStatusBadge.vue'
+import AppToggle from '@/components/ui/AppToggle.vue'
 import { db, storage } from '@/services/firebase'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -71,7 +74,7 @@ interface TicketResponse {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Metadados de categoria — visual e semântico
+// Metadados de categoria
 // ─────────────────────────────────────────────────────────────────────────────
 const categoryMeta: Record<Category, {
     label: string
@@ -140,7 +143,9 @@ function getStatus(s: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 function toDate(ts: Timestamp | null | undefined): Date | null {
     if (!ts) return null
-    return typeof (ts as any).toDate === 'function' ? (ts as any).toDate() : new Date(ts as any)
+    return typeof (ts as unknown as { toDate: () => Date }).toDate === 'function'
+        ? (ts as unknown as { toDate: () => Date }).toDate()
+        : new Date(ts as unknown as string)
 }
 
 function formatDate(ts: Timestamp | null | undefined) {
@@ -166,8 +171,6 @@ function timeAgo(ts: Timestamp | null | undefined) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Lista de tickets (real-time)
 // ─────────────────────────────────────────────────────────────────────────────
-// NOTA: requer índice composto no Firestore: userId ASC + createdAt DESC
-// Firebase criará o link para o índice no console se ainda não existir.
 const tickets = ref<SupportTicket[]>([])
 const ticketsLoading = ref(true)
 const ticketsError = ref<string | null>(null)
@@ -262,14 +265,25 @@ const categoryColorMap: Record<Category, { ring: string; bg: string; text: strin
 const selectedCategory = ref<Category | null>(null)
 const title = ref('')
 const description = ref('')
+
+// Arquivo de screenshot — gerenciado pelo AppFileDropzone via v-model
 const screenshotFile = ref<File | null>(null)
-const screenshotPreview = ref<string | null>(null)
-const fileInputRef = ref<HTMLInputElement | null>(null)
+const dropzoneRef = ref<InstanceType<typeof AppFileDropzone> | null>(null)
+
+// Modo de upload: false = base64 no Firestore | true = Firebase Storage
+const useStorageUpload = ref(false)
+
+const maxFileSizeBytes = computed(() =>
+    useStorageUpload.value ? 5 * 1024 * 1024 : 700 * 1024
+)
+const maxFileSizeLabel = computed(() =>
+    useStorageUpload.value ? '5 MB' : '700 KB'
+)
+
 const isSubmitting = ref(false)
 const submitted = ref(false)
 const ticketId = ref('')
 const formError = ref<string | null>(null)
-const isDragging = ref(false)
 
 const isValid = computed(() =>
     selectedCategory.value !== null &&
@@ -277,29 +291,13 @@ const isValid = computed(() =>
     description.value.trim().length >= 10
 )
 
-function handleFileChange(e: Event) {
-    const file = (e.target as HTMLInputElement).files?.[0]
-    if (!file) return
-    if (!file.type.startsWith('image/')) { formError.value = 'Apenas imagens são aceitas.'; return }
-    if (file.size > 5 * 1024 * 1024) { formError.value = 'Imagem deve ter menos de 5 MB.'; return }
-    formError.value = null
-    screenshotFile.value = file
-    const reader = new FileReader()
-    reader.onload = ev => { screenshotPreview.value = ev.target?.result as string }
-    reader.readAsDataURL(file)
-}
-
-function removeScreenshot() {
-    screenshotFile.value = null
-    screenshotPreview.value = null
-    if (fileInputRef.value) fileInputRef.value.value = ''
-}
-
-function onDrop(e: DragEvent) {
-    isDragging.value = false
-    const file = e.dataTransfer?.files?.[0]
-    if (!file) return
-    handleFileChange({ target: { files: [file] } } as unknown as Event)
+/** Ao trocar o modo, revalida o arquivo já selecionado */
+function handleToggleStorageMode(newValue: boolean) {
+    useStorageUpload.value = newValue
+    if (screenshotFile.value && screenshotFile.value.size > maxFileSizeBytes.value) {
+        screenshotFile.value = null
+        formError.value = `Imagem removida — excede ${maxFileSizeLabel.value} no modo atual.`
+    }
 }
 
 function collectSystemMeta() {
@@ -326,12 +324,20 @@ async function handleSubmit() {
         let screenshotUrl: string | null = null
         if (screenshotFile.value) {
             try {
-                const ext = screenshotFile.value.name.split('.').pop()
-                const path = `support-screenshots/${authStore.user?.uid}/${Date.now()}.${ext}`
-                const sRef = storageRef(storage, path)
-                const snap = await uploadBytes(sRef, screenshotFile.value)
-                screenshotUrl = await getDownloadURL(snap.ref)
-            } catch { /* Storage opcional — segue sem imagem */ }
+                if (useStorageUpload.value) {
+                    // Estratégia Storage — requer Blaze
+                    const ext = screenshotFile.value.name.split('.').pop()
+                    const path = `support-screenshots/${authStore.user?.uid}/${Date.now()}.${ext}`
+                    const sRef = storageRef(storage, path)
+                    const snap = await uploadBytes(sRef, screenshotFile.value)
+                    screenshotUrl = await getDownloadURL(snap.ref)
+                } else {
+                    // Estratégia base64 — salva direto no documento Firestore
+                    screenshotUrl = dropzoneRef.value?.preview ?? null
+                }
+            } catch {
+                // Screenshot é opcional — segue sem imagem se falhar
+            }
         }
         const docRef = await addDoc(collection(db, 'support_tickets'), {
             category: selectedCategory.value,
@@ -358,7 +364,7 @@ function resetForm() {
     selectedCategory.value = null
     title.value = ''
     description.value = ''
-    removeScreenshot()
+    screenshotFile.value = null
     submitted.value = false
     ticketId.value = ''
     formError.value = null
@@ -381,24 +387,23 @@ function resetForm() {
                     <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,480px)_1fr] gap-4 sm:gap-5 items-start">
 
                         <!-- ══════════════════════════════════════════════════
-                             COLUNA ESQUERDA — Formulário
-                        ═══════════════════════════════════════════════════ -->
+                 COLUNA ESQUERDA — Formulário
+            ═══════════════════════════════════════════════════ -->
                         <div class="space-y-4 sm:space-y-5">
 
                             <!-- Cabeçalho da seção -->
                             <div
                                 class="relative overflow-hidden rounded-xl sm:rounded-2xl p-5 sm:p-7
-                                       bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
-                                       [box-shadow:0_0_0_1px_rgb(var(--color-primary-100)),0_4px_24px_-4px_rgb(var(--color-primary-200)/40%)]
-                                       dark:[box-shadow:0_0_0_1px_rgb(var(--color-primary-900)),0_4px_24px_-4px_rgb(var(--color-primary-950)/60%)]">
+                       bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
+                       [box-shadow:0_0_0_1px_rgb(var(--color-primary-100)),0_4px_24px_-4px_rgb(var(--color-primary-200)/40%)]
+                       dark:[box-shadow:0_0_0_1px_rgb(var(--color-primary-900)),0_4px_24px_-4px_rgb(var(--color-primary-950)/60%)]">
                                 <div class="absolute -top-12 -right-12 w-48 h-48 rounded-full opacity-10
-                                            bg-primary-400 dark:bg-primary-600 blur-3xl pointer-events-none" />
+                            bg-primary-400 dark:bg-primary-600 blur-3xl pointer-events-none" />
                                 <div class="absolute -bottom-8 -left-8 w-32 h-32 rounded-full opacity-[0.07]
-                                            bg-secondary-400 dark:bg-secondary-600 blur-2xl pointer-events-none" />
+                            bg-secondary-400 dark:bg-secondary-600 blur-2xl pointer-events-none" />
                                 <div class="relative flex items-start gap-4">
-                                    <div
-                                        class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0
-                                                bg-gradient-to-br from-primary-400 to-primary-600 shadow-lg shadow-primary-500/25">
+                                    <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0
+                            bg-gradient-to-br from-primary-400 to-primary-600 shadow-lg shadow-primary-500/25">
                                         <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24"
                                             stroke="currentColor" stroke-width="1.75">
                                             <path stroke-linecap="round" stroke-linejoin="round"
@@ -406,14 +411,12 @@ function resetForm() {
                                         </svg>
                                     </div>
                                     <div>
-                                        <h1
-                                            class="text-base sm:text-lg font-semibold
-                                                   text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
+                                        <h1 class="text-base sm:text-lg font-semibold
+                               text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
                                             Abrir ticket de suporte
                                         </h1>
-                                        <p
-                                            class="mt-0.5 text-xs sm:text-sm leading-relaxed
-                                                   text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                                        <p class="mt-0.5 text-xs sm:text-sm leading-relaxed
+                               text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                             Dados técnicos do seu ambiente são coletados automaticamente para agilizar o
                                             diagnóstico.
                                         </p>
@@ -425,17 +428,16 @@ function resetForm() {
                             <Transition name="fade-up" appear>
                                 <div v-if="submitted"
                                     class="rounded-xl sm:rounded-2xl overflow-hidden
-                                           bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
-                                           [box-shadow:0_0_0_1px_rgb(var(--color-primary-100)),0_8px_32px_-8px_rgb(var(--color-primary-200)/50%)]
-                                           dark:[box-shadow:0_0_0_1px_rgb(var(--color-primary-900)),0_8px_32px_-8px_rgb(var(--color-primary-950)/70%)]">
+                         bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
+                         [box-shadow:0_0_0_1px_rgb(var(--color-primary-100)),0_8px_32px_-8px_rgb(var(--color-primary-200)/50%)]
+                         dark:[box-shadow:0_0_0_1px_rgb(var(--color-primary-900)),0_8px_32px_-8px_rgb(var(--color-primary-950)/70%)]">
                                     <div class="h-1 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400" />
                                     <div class="p-8 text-center">
                                         <div class="relative mx-auto w-14 h-14 mb-4">
                                             <div
                                                 class="absolute inset-0 rounded-full bg-emerald-100 dark:bg-emerald-950/50 animate-ping opacity-40" />
-                                            <div
-                                                class="relative w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500
-                                                        flex items-center justify-center shadow-xl shadow-emerald-500/30">
+                                            <div class="relative w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500
+                                  flex items-center justify-center shadow-xl shadow-emerald-500/30">
                                                 <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24"
                                                     stroke="currentColor" stroke-width="2">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
@@ -443,9 +445,8 @@ function resetForm() {
                                                 </svg>
                                             </div>
                                         </div>
-                                        <h2
-                                            class="text-lg font-semibold mb-1
-                                                   text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
+                                        <h2 class="text-lg font-semibold mb-1
+                               text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
                                             Ticket enviado!
                                         </h2>
                                         <p
@@ -455,17 +456,16 @@ function resetForm() {
                                         <p
                                             class="text-xs font-mono mb-5 text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                             Ticket
-                                            <span
-                                                class="px-2 py-0.5 rounded-md
-                                                         bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
-                                                         text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
+                                            <span class="px-2 py-0.5 rounded-md
+                                   bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
+                                   text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
                                                 #{{ ticketId }}
                                             </span>
                                         </p>
                                         <button @click="resetForm" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium
-                                                   bg-gradient-to-r from-primary-500 to-primary-600 text-white
-                                                   shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 hover:-translate-y-0.5
-                                                   transition-all duration-200 active:scale-95">
+                             bg-gradient-to-r from-primary-500 to-primary-600 text-white
+                             shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 hover:-translate-y-0.5
+                             transition-all duration-200 active:scale-95">
                                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                                                 stroke-width="2">
                                                 <path stroke-linecap="round" stroke-linejoin="round"
@@ -481,16 +481,15 @@ function resetForm() {
                             <Transition name="fade-up" appear>
                                 <div v-if="!submitted"
                                     class="rounded-xl sm:rounded-2xl overflow-hidden
-                                           bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
-                                           [box-shadow:0_0_0_1px_rgb(var(--color-primary-100)),0_4px_24px_-4px_rgb(var(--color-primary-200)/40%)]
-                                           dark:[box-shadow:0_0_0_1px_rgb(var(--color-primary-900)),0_4px_24px_-4px_rgb(var(--color-primary-950)/60%)]">
+                         bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
+                         [box-shadow:0_0_0_1px_rgb(var(--color-primary-100)),0_4px_24px_-4px_rgb(var(--color-primary-200)/40%)]
+                         dark:[box-shadow:0_0_0_1px_rgb(var(--color-primary-900)),0_4px_24px_-4px_rgb(var(--color-primary-950)/60%)]">
                                     <div class="p-5 sm:p-7 space-y-6">
 
                                         <!-- Categoria -->
                                         <fieldset>
-                                            <legend
-                                                class="text-xs font-semibold uppercase tracking-widest mb-3
-                                                           text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                                            <legend class="text-xs font-semibold uppercase tracking-widest mb-3
+                                     text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                                 1 — Tipo de contato
                                             </legend>
                                             <div class="grid grid-cols-2 gap-2">
@@ -503,7 +502,7 @@ function resetForm() {
                                                 ]" @click="selectedCategory = cat.value">
                                                     <Transition name="scale-pop">
                                                         <span v-if="selectedCategory === cat.value" class="absolute top-2 right-2 w-4 h-4 rounded-full bg-white dark:bg-[rgb(var(--dark-bg-surface))]
-                                                                   flex items-center justify-center shadow-sm">
+                                     flex items-center justify-center shadow-sm">
                                                             <svg class="w-2.5 h-2.5"
                                                                 :class="categoryColorMap[cat.value].icon"
                                                                 viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -526,12 +525,13 @@ function resetForm() {
                                                     <div>
                                                         <p
                                                             :class="['text-xs font-semibold leading-none',
-                                                                selectedCategory === cat.value ? categoryColorMap[cat.value].text : 'text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]']">
+                                                                selectedCategory === cat.value
+                                                                    ? categoryColorMap[cat.value].text
+                                                                    : 'text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]']">
                                                             {{ cat.label }}
                                                         </p>
-                                                        <p
-                                                            class="mt-1 text-[10px] leading-snug hidden sm:block
-                                                                   text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                                                        <p class="mt-1 text-[10px] leading-snug hidden sm:block
+                                       text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                                             {{ cat.description }}
                                                         </p>
                                                     </div>
@@ -544,9 +544,8 @@ function resetForm() {
 
                                         <!-- Título -->
                                         <div>
-                                            <label
-                                                class="block text-xs font-semibold uppercase tracking-widest mb-2
-                                                          text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                                            <label class="block text-xs font-semibold uppercase tracking-widest mb-2
+                                    text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                                 2 — Resumo
                                             </label>
                                             <div class="relative">
@@ -556,12 +555,13 @@ function resetForm() {
                                                         'bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]',
                                                         'text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]',
                                                         'placeholder:text-[rgb(var(--text-muted))] dark:placeholder:text-[rgb(var(--dark-text-muted))]',
-                                                        title.length >= 5 ? 'ring-primary-300/60 dark:ring-primary-700/60' : 'ring-[rgb(var(--color-primary-100))] dark:ring-[rgb(var(--color-primary-900))]',
+                                                        title.length >= 5
+                                                            ? 'ring-primary-300/60 dark:ring-primary-700/60'
+                                                            : 'ring-[rgb(var(--color-primary-100))] dark:ring-[rgb(var(--color-primary-900))]',
                                                         'focus:ring-2 focus:ring-primary-400/80 dark:focus:ring-primary-500/80',
                                                     ]" />
-                                                <span
-                                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono
-                                                             text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono
+                                     text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                                     {{ title.length }}/120
                                                 </span>
                                             </div>
@@ -569,9 +569,8 @@ function resetForm() {
 
                                         <!-- Descrição -->
                                         <div>
-                                            <label
-                                                class="block text-xs font-semibold uppercase tracking-widest mb-2
-                                                          text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                                            <label class="block text-xs font-semibold uppercase tracking-widest mb-2
+                                    text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                                 3 — Detalhes
                                             </label>
                                             <div class="relative">
@@ -582,79 +581,49 @@ function resetForm() {
                                                         'bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]',
                                                         'text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]',
                                                         'placeholder:text-[rgb(var(--text-muted))] dark:placeholder:text-[rgb(var(--dark-text-muted))]',
-                                                        description.length >= 10 ? 'ring-primary-300/60 dark:ring-primary-700/60' : 'ring-[rgb(var(--color-primary-100))] dark:ring-[rgb(var(--color-primary-900))]',
+                                                        description.length >= 10
+                                                            ? 'ring-primary-300/60 dark:ring-primary-700/60'
+                                                            : 'ring-[rgb(var(--color-primary-100))] dark:ring-[rgb(var(--color-primary-900))]',
                                                         'focus:ring-2 focus:ring-primary-400/80 dark:focus:ring-primary-500/80',
                                                     ]" />
-                                                <span
-                                                    class="absolute right-3 bottom-3 text-[10px] font-mono
-                                                             text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                                                <span class="absolute right-3 bottom-3 text-[10px] font-mono
+                                     text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                                     {{ description.length }}/2000
                                                 </span>
                                             </div>
                                         </div>
 
-                                        <!-- Screenshot -->
+                                        <!-- Screenshot + toggle Storage/Firestore -->
                                         <div>
-                                            <label
-                                                class="block text-xs font-semibold uppercase tracking-widest mb-2
-                                                          text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
-                                                4 — Print
-                                                <span
-                                                    class="normal-case tracking-normal font-normal ml-1 opacity-60">(opcional
-                                                    · 5 MB)</span>
-                                            </label>
-                                            <Transition name="fade-up">
-                                                <div v-if="screenshotPreview"
-                                                    class="relative rounded-xl overflow-hidden mb-2 ring-1 ring-primary-200 dark:ring-primary-800">
-                                                    <img :src="screenshotPreview"
-                                                        class="w-full max-h-36 object-cover object-top" />
-                                                    <div
-                                                        class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                                                    <button @click="removeScreenshot"
-                                                        class="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center
-                                                               bg-black/50 hover:bg-black/70 text-white transition-colors backdrop-blur-sm">
-                                                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24"
-                                                            stroke="currentColor" stroke-width="2.5">
-                                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                                d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                            </Transition>
-                                            <div v-if="!screenshotPreview" :class="[
-                                                'relative rounded-xl border-2 border-dashed transition-all duration-200 cursor-pointer group',
-                                                isDragging ? 'border-primary-400 bg-primary-50 dark:bg-primary-950/30' : 'border-[rgb(var(--color-primary-200))] dark:border-[rgb(var(--color-primary-800))] hover:border-primary-300 dark:hover:border-primary-700',
-                                            ]" @dragover.prevent="isDragging = true"
-                                                @dragleave.prevent="isDragging = false" @drop.prevent="onDrop"
-                                                @click="fileInputRef?.click()">
-                                                <div class="flex items-center gap-3 py-4 px-4 pointer-events-none">
-                                                    <svg :class="['w-5 h-5 transition-colors flex-shrink-0', isDragging ? 'text-primary-500' : 'text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))] group-hover:text-primary-400']"
-                                                        fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                                                        stroke-width="1.75">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                    </svg>
-                                                    <div>
-                                                        <p
-                                                            class="text-xs font-medium text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
-                                                            {{ isDragging ? 'Solte aqui' : 'Arraste ou clique' }}
-                                                        </p>
-                                                        <p
-                                                            class="text-[10px] text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
-                                                            PNG, JPG, WebP</p>
-                                                    </div>
-                                                </div>
-                                                <input ref="fileInputRef" type="file" accept="image/*"
-                                                    class="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                                    @change="handleFileChange" />
+                                            <div class="flex items-center justify-between mb-2">
+                                                <label class="text-xs font-semibold uppercase tracking-widest
+                                      text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                                                    4 — Print
+                                                    <span
+                                                        class="normal-case tracking-normal font-normal ml-1 opacity-60">
+                                                        (opcional · {{ maxFileSizeLabel }})
+                                                    </span>
+                                                </label>
+
+                                                <!-- ✅ Toggle componentizado -->
+                                                <AppToggle :model-value="useStorageUpload" label-left="Firestore"
+                                                    label-right="Storage" :title="useStorageUpload
+                                                        ? 'Usando Firebase Storage (Blaze)'
+                                                        : 'Usando base64 no Firestore (Spark)'"
+                                                    @update:model-value="handleToggleStorageMode" />
                                             </div>
+
+                                            <!-- ✅ Dropzone componentizado -->
+                                            <AppFileDropzone ref="dropzoneRef" v-model="screenshotFile"
+                                                :max-size-bytes="maxFileSizeBytes" :max-size-label="maxFileSizeLabel"
+                                                accept="image/*" hint="PNG, JPG, WebP"
+                                                @error="(msg) => (formError = msg)" />
                                         </div>
 
                                         <!-- Aviso dados técnicos -->
-                                        <div
-                                            class="rounded-xl px-3 py-2.5 flex items-start gap-2.5
-                                                    bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
-                                                    ring-1 ring-[rgb(var(--color-primary-100))] dark:ring-[rgb(var(--color-primary-900))]">
+                                        <div class="rounded-xl px-3 py-2.5 flex items-start gap-2.5
+                                bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
+                                ring-1 ring-[rgb(var(--color-primary-100))] dark:ring-[rgb(var(--color-primary-900))]">
                                             <svg class="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-primary-400" fill="none"
                                                 viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
                                                 <path stroke-linecap="round" stroke-linejoin="round"
@@ -669,9 +638,8 @@ function resetForm() {
 
                                         <!-- Erro -->
                                         <Transition name="fade-up">
-                                            <div v-if="formError"
-                                                class="flex items-start gap-2.5 rounded-xl px-3 py-2.5
-                                                       bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200 dark:ring-rose-800/60">
+                                            <div v-if="formError" class="flex items-start gap-2.5 rounded-xl px-3 py-2.5
+                               bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200 dark:ring-rose-800/60">
                                                 <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-500" fill="none"
                                                     viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
@@ -681,13 +649,15 @@ function resetForm() {
                                             </div>
                                         </Transition>
 
-                                        <!-- Rodapé do form -->
+                                        <!-- Rodapé do form: barra de progresso + submit -->
                                         <div class="flex items-center justify-between pt-1">
                                             <div class="flex items-center gap-1.5">
                                                 <div v-for="step in [selectedCategory !== null, title.length >= 5, description.length >= 10]"
                                                     :key="String(step)"
                                                     :class="['h-1 rounded-full transition-all duration-300',
-                                                        step ? 'bg-primary-500 w-5' : 'bg-[rgb(var(--color-primary-200))] dark:bg-[rgb(var(--color-primary-800))] w-3']" />
+                                                        step
+                                                            ? 'bg-primary-500 w-5'
+                                                            : 'bg-[rgb(var(--color-primary-200))] dark:bg-[rgb(var(--color-primary-800))] w-3']" />
                                                 <span
                                                     class="ml-1 text-[10px] font-medium text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                                     {{ [selectedCategory !== null, title.length >= 5, description.length
@@ -721,27 +691,25 @@ function resetForm() {
                         </div>
 
                         <!-- ══════════════════════════════════════════════════
-                             COLUNA DIREITA — Meus Tickets
-                        ═══════════════════════════════════════════════════ -->
+                 COLUNA DIREITA — Meus Tickets
+            ═══════════════════════════════════════════════════ -->
                         <div class="xl:sticky xl:top-0">
                             <div
                                 class="rounded-xl sm:rounded-2xl overflow-hidden
-                                       bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
-                                       [box-shadow:0_0_0_1px_rgb(var(--color-primary-100)),0_4px_24px_-4px_rgb(var(--color-primary-200)/40%)]
-                                       dark:[box-shadow:0_0_0_1px_rgb(var(--color-primary-900)),0_4px_24px_-4px_rgb(var(--color-primary-950)/60%)]">
+                       bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
+                       [box-shadow:0_0_0_1px_rgb(var(--color-primary-100)),0_4px_24px_-4px_rgb(var(--color-primary-200)/40%)]
+                       dark:[box-shadow:0_0_0_1px_rgb(var(--color-primary-900)),0_4px_24px_-4px_rgb(var(--color-primary-950)/60%)]">
 
                                 <!-- Header do painel de tickets -->
-                                <div
-                                    class="flex items-center justify-between px-5 py-4 border-b
-                                            border-[rgb(var(--color-primary-100))] dark:border-[rgb(var(--color-primary-900))]">
+                                <div class="flex items-center justify-between px-5 py-4 border-b
+                            border-[rgb(var(--color-primary-100))] dark:border-[rgb(var(--color-primary-900))]">
                                     <div class="flex items-center gap-2.5">
-                                        <!-- Botão voltar (só no detalhe) -->
                                         <Transition name="scale-pop">
                                             <button v-if="selectedTicket" @click="closeDetail" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors
-                                                       bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
-                                                       hover:bg-primary-50 dark:hover:bg-primary-950/40
-                                                       text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]
-                                                       hover:text-primary-500">
+                               bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
+                               hover:bg-primary-50 dark:hover:bg-primary-950/40
+                               text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]
+                               hover:text-primary-500">
                                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24"
                                                     stroke="currentColor" stroke-width="2">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
@@ -750,32 +718,30 @@ function resetForm() {
                                             </button>
                                         </Transition>
                                         <div>
-                                            <h2
-                                                class="text-sm font-semibold
-                                                       text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
+                                            <h2 class="text-sm font-semibold
+                                 text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
                                                 {{ selectedTicket ? 'Detalhes do ticket' : 'Meus tickets' }}
                                             </h2>
                                             <p v-if="!selectedTicket"
                                                 class="text-[10px] text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                                 {{ categoryCounts.todos }} ticket{{ categoryCounts.todos !== 1 ? 's' :
-                                                    '' }} no total
+                                                    ''
+                                                }} no total
                                             </p>
                                         </div>
                                     </div>
-                                    <!-- Badge de status no header do detalhe -->
-                                    <span v-if="selectedTicket"
-                                        :class="['inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold', getStatus(selectedTicket.status).badge]">
-                                        <span
-                                            :class="['w-1.5 h-1.5 rounded-full', getStatus(selectedTicket.status).dot]" />
-                                        {{ getStatus(selectedTicket.status).label }}
-                                    </span>
+
+                                    <!-- ✅ Badge de status no detalhe usando AppStatusBadge -->
+                                    <AppStatusBadge v-if="selectedTicket"
+                                        :label="getStatus(selectedTicket.status).label"
+                                        :dot="getStatus(selectedTicket.status).dot"
+                                        :badge="getStatus(selectedTicket.status).badge" />
                                 </div>
 
                                 <!-- Filtros (lista) -->
                                 <Transition name="fade">
-                                    <div v-if="!selectedTicket"
-                                        class="flex items-center gap-1.5 px-4 py-2.5 overflow-x-auto scrollbar-none border-b
-                                               border-[rgb(var(--color-primary-100))] dark:border-[rgb(var(--color-primary-900))]">
+                                    <div v-if="!selectedTicket" class="flex items-center gap-1.5 px-4 py-2.5 overflow-x-auto scrollbar-none border-b
+                           border-[rgb(var(--color-primary-100))] dark:border-[rgb(var(--color-primary-900))]">
                                         <button v-for="f in ([
                                             { key: 'todos', label: 'Todos', count: categoryCounts.todos },
                                             { key: 'bug', label: 'Bugs', count: categoryCounts.bug },
@@ -791,7 +757,9 @@ function resetForm() {
                                             {{ f.label }}
                                             <span v-if="f.count > 0"
                                                 :class="['text-[10px] px-1.5 py-0.5 rounded-full font-semibold',
-                                                    activeFilter === f.key ? 'bg-primary-200/60 dark:bg-primary-900 text-primary-700 dark:text-primary-300' : 'bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]']">
+                                                    activeFilter === f.key
+                                                        ? 'bg-primary-200/60 dark:bg-primary-900 text-primary-700 dark:text-primary-300'
+                                                        : 'bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]']">
                                                 {{ f.count }}
                                             </span>
                                         </button>
@@ -801,7 +769,7 @@ function resetForm() {
                                 <!-- Conteúdo -->
                                 <div class="xl:max-h-[calc(100vh-18rem)] xl:overflow-y-auto">
 
-                                    <!-- Loading -->
+                                    <!-- Loading skeleton -->
                                     <div v-if="ticketsLoading" class="p-4 space-y-2">
                                         <div v-for="i in 3" :key="i"
                                             class="h-16 rounded-xl animate-pulse bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]" />
@@ -833,9 +801,8 @@ function resetForm() {
                                                         #{{ selectedTicket.id.slice(0, 8).toUpperCase() }}
                                                     </span>
                                                 </div>
-                                                <h3
-                                                    class="text-sm font-semibold leading-snug
-                                                           text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
+                                                <h3 class="text-sm font-semibold leading-snug
+                                   text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
                                                     {{ selectedTicket.title }}
                                                 </h3>
                                                 <p
@@ -847,12 +814,14 @@ function resetForm() {
                                             <!-- Banner de expectativa por categoria -->
                                             <div :class="[
                                                 'rounded-xl px-3.5 py-3 text-xs leading-relaxed',
-                                                selectedTicket.category === 'bug' ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-800/50'
-                                                    : selectedTicket.category === 'duvida' ? 'bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300 ring-1 ring-sky-200 dark:ring-sky-800/50'
-                                                        : selectedTicket.category === 'melhoria' ? 'bg-primary-50 dark:bg-primary-950/30 text-primary-700 dark:text-primary-300 ring-1 ring-primary-200 dark:ring-primary-800/50'
+                                                selectedTicket.category === 'bug'
+                                                    ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-800/50'
+                                                    : selectedTicket.category === 'duvida'
+                                                        ? 'bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300 ring-1 ring-sky-200 dark:ring-sky-800/50'
+                                                        : selectedTicket.category === 'melhoria'
+                                                            ? 'bg-primary-50 dark:bg-primary-950/30 text-primary-700 dark:text-primary-300 ring-1 ring-primary-200 dark:ring-primary-800/50'
                                                             : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-800/50'
                                             ]">
-                                                <!-- Mensagem especial de sugestão visualizada -->
                                                 <template
                                                     v-if="selectedTicket.category === 'sugestao' && selectedTicket.status === 'visualizado'">
                                                     <span class="font-semibold block mb-0.5">Obrigado pela sugestão!
@@ -867,25 +836,23 @@ function resetForm() {
 
                                             <!-- Descrição original -->
                                             <div>
-                                                <p
-                                                    class="text-[10px] font-semibold uppercase tracking-widest mb-2
-                                                           text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                                                <p class="text-[10px] font-semibold uppercase tracking-widest mb-2
+                                   text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                                     Descrição
                                                 </p>
                                                 <div
                                                     class="rounded-xl px-4 py-3 text-xs leading-relaxed
-                                                            bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
-                                                            text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]
-                                                            ring-1 ring-[rgb(var(--color-primary-100))] dark:ring-[rgb(var(--color-primary-900))]">
+                                    bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
+                                    text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]
+                                    ring-1 ring-[rgb(var(--color-primary-100))] dark:ring-[rgb(var(--color-primary-900))]">
                                                     {{ selectedTicket.description }}
                                                 </div>
                                             </div>
 
                                             <!-- Screenshot -->
                                             <div v-if="selectedTicket.screenshotUrl">
-                                                <p
-                                                    class="text-[10px] font-semibold uppercase tracking-widest mb-2
-                                                           text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                                                <p class="text-[10px] font-semibold uppercase tracking-widest mb-2
+                                   text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                                     Screenshot
                                                 </p>
                                                 <a :href="selectedTicket.screenshotUrl" target="_blank" rel="noopener">
@@ -896,12 +863,11 @@ function resetForm() {
 
                                             <!-- Respostas -->
                                             <div>
-                                                <p
-                                                    class="text-[10px] font-semibold uppercase tracking-widest mb-3
-                                                           text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                                                <p class="text-[10px] font-semibold uppercase tracking-widest mb-3
+                                   text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                                                     Respostas
                                                     <span v-if="responses.length > 0" class="ml-1.5 px-1.5 py-0.5 rounded-full bg-primary-100 dark:bg-primary-950/60
-                                                               text-primary-700 dark:text-primary-300 font-semibold">
+                                   text-primary-700 dark:text-primary-300 font-semibold">
                                                         {{ responses.length }}
                                                     </span>
                                                 </p>
@@ -915,8 +881,8 @@ function resetForm() {
                                                 <!-- Sem respostas -->
                                                 <div v-else-if="responses.length === 0"
                                                     class="rounded-xl px-4 py-5 text-center
-                                                           bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
-                                                           ring-1 ring-[rgb(var(--color-primary-100))] dark:ring-[rgb(var(--color-primary-900))]">
+                                 bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
+                                 ring-1 ring-[rgb(var(--color-primary-100))] dark:ring-[rgb(var(--color-primary-900))]">
                                                     <svg class="w-6 h-6 mx-auto mb-2 text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))] opacity-50"
                                                         fill="none" viewBox="0 0 24 24" stroke="currentColor"
                                                         stroke-width="1.5">
@@ -954,7 +920,8 @@ function resetForm() {
                                                         </div>
                                                         <p
                                                             class="text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
-                                                            {{ r.content }}</p>
+                                                            {{ r.content }}
+                                                        </p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -967,9 +934,8 @@ function resetForm() {
 
                                             <!-- Lista vazia -->
                                             <div v-if="filteredTickets.length === 0" class="p-8 text-center">
-                                                <div
-                                                    class="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center
-                                                            bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]">
+                                                <div class="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center
+                                    bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]">
                                                     <svg class="w-6 h-6 text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))] opacity-50"
                                                         fill="none" viewBox="0 0 24 24" stroke="currentColor"
                                                         stroke-width="1.5">
@@ -1017,26 +983,24 @@ function resetForm() {
                                                         <!-- Info -->
                                                         <div class="flex-1 min-w-0">
                                                             <div class="flex items-start justify-between gap-2 mb-1">
-                                                                <p
-                                                                    class="text-xs font-semibold leading-snug truncate
-                                                                           text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
+                                                                <p class="text-xs font-semibold leading-snug truncate
+                                           text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
                                                                     {{ ticket.title }}
                                                                 </p>
-                                                                <span
-                                                                    :class="['flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold', getStatus(ticket.status).badge]">
-                                                                    <span
-                                                                        :class="['w-1.5 h-1.5 rounded-full flex-shrink-0', getStatus(ticket.status).dot]" />
-                                                                    {{ getStatus(ticket.status).label }}
-                                                                </span>
+
+                                                                <!-- ✅ AppStatusBadge na lista -->
+                                                                <AppStatusBadge :label="getStatus(ticket.status).label"
+                                                                    :dot="getStatus(ticket.status).dot"
+                                                                    :badge="getStatus(ticket.status).badge"
+                                                                    class="flex-shrink-0" />
                                                             </div>
 
                                                             <div class="flex items-center justify-between">
-                                                                <span :class="['text-[10px] font-medium', categoryMeta[ticket.category].typeBadge,
-                                                                    'px-1.5 py-0.5 rounded-md']">
+                                                                <span
+                                                                    :class="['text-[10px] font-medium px-1.5 py-0.5 rounded-md', categoryMeta[ticket.category].typeBadge]">
                                                                     {{ categoryMeta[ticket.category].label }}
                                                                 </span>
                                                                 <div class="flex items-center gap-2">
-                                                                    <!-- Indicador de resposta não lida -->
                                                                     <span v-if="ticket.status === 'respondido'"
                                                                         class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                                                                     <span
@@ -1052,7 +1016,6 @@ function resetForm() {
                                                                 </div>
                                                             </div>
 
-                                                            <!-- Dica de SLA por categoria -->
                                                             <p
                                                                 class="mt-1.5 text-[10px] italic text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))] opacity-70">
                                                                 {{ categoryMeta[ticket.category].slaHint(ticket.status)
