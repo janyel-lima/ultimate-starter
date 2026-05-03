@@ -1,10 +1,4 @@
 <script setup lang="ts">
-// LoginView.vue
-// FIX: o cadastro (register) agora passa pelo authStore.register(),
-// que centraliza o tratamento de erro igual ao loginEmail.
-// Antes, registerWithEmail era importado diretamente, bypassando
-// o parseFirebaseError e o authStore.error nunca era preenchido.
-
 import AppButton from '@/components/ui/AppButton.vue'
 import { useTheme } from '@/composables/useTheme'
 import { useAuthStore } from '@/stores/auth'
@@ -30,7 +24,6 @@ async function handleEmailSubmit() {
         if (mode.value === 'login') {
             await authStore.loginEmail(email.value, password.value)
         } else {
-            // FIX: usa authStore.register() para que erros cheguem ao authStore.error
             await authStore.register(email.value, password.value)
         }
         await router.push({ name: 'dashboard' })
@@ -56,12 +49,14 @@ async function handleGoogleLogin() {
 </script>
 
 <template>
-    <div class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+    <div class="min-h-screen flex items-center justify-center p-4
+         bg-[rgb(var(--bg-base))] dark:bg-[rgb(var(--dark-bg-base))]">
 
         <!-- Toggle de tema no canto -->
-        <button class="fixed top-4 right-4 p-2 rounded-lg text-slate-500 hover:text-slate-800
-             dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100
-             dark:hover:bg-slate-800 transition-colors"
+        <button class="fixed top-4 right-4 p-2 rounded-lg transition-colors
+             text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]
+             hover:bg-[rgb(var(--bg-muted))] dark:hover:bg-[rgb(var(--dark-bg-muted))]
+             hover:text-[rgb(var(--text-heading))] dark:hover:text-[rgb(var(--dark-text-heading))]"
             :aria-label="isDark ? 'Ativar modo claro' : 'Ativar modo escuro'" @click="toggleDark()">
             <svg v-if="isDark" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -84,20 +79,27 @@ async function handleGoogleLogin() {
                             d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                 </div>
-                <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-50">Ultimate Starter</h1>
-                <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
+                <h1
+                    class="text-2xl font-bold text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
+                    Ultimate Starter
+                </h1>
+                <p class="text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))] text-sm mt-1">
                     {{ mode === 'login' ? 'Entre na sua conta' : 'Crie sua conta' }}
                 </p>
             </div>
 
             <!-- Form card -->
-            <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100
-                  dark:border-slate-800 p-8">
+            <div class="rounded-2xl p-8
+                  bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
+                  shadow-[0_0_0_1px_rgb(var(--color-primary-100)),0_4px_24px_-4px_rgb(var(--color-primary-200)/30%)]
+                  dark:shadow-[0_0_0_1px_rgb(var(--color-primary-900)),0_4px_24px_-4px_rgb(0_0_0/40%)]">
 
                 <!-- Erro do store -->
                 <Transition name="fade">
-                    <div v-if="authStore.error" data-testid="auth-error" class="mb-5 p-3 bg-red-50 dark:bg-red-950 border border-red-100 dark:border-red-900
-                   rounded-xl text-red-600 dark:text-red-400 text-sm" role="alert">
+                    <div v-if="authStore.error" data-testid="auth-error" class="mb-5 p-3 rounded-xl text-sm
+                   bg-red-50 dark:bg-red-950
+                   shadow-[0_0_0_1px_rgb(239_68_68/20%)]
+                   text-red-600 dark:text-red-400" role="alert">
                         {{ authStore.error }}
                     </div>
                 </Transition>
@@ -105,33 +107,41 @@ async function handleGoogleLogin() {
                 <form class="space-y-4" @submit.prevent="handleEmailSubmit">
                     <!-- E-mail -->
                     <div>
-                        <label for="email" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                        <label for="email" class="block text-sm font-medium mb-1.5
+                             text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
                             E-mail
                         </label>
                         <input id="email" v-model="email" type="email" required autocomplete="email"
-                            placeholder="voce@exemplo.com" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700
-                     bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-50
-                     placeholder:text-slate-400 dark:placeholder:text-slate-500
-                     focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
-                     transition-shadow text-sm" />
+                            placeholder="voce@exemplo.com" class="w-full px-3.5 py-2.5 rounded-xl text-sm
+                     bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
+                     text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]
+                     placeholder:text-[rgb(var(--text-muted))] dark:placeholder:text-[rgb(var(--dark-text-muted))]
+                     shadow-[0_0_0_1px_rgb(var(--color-primary-100))] dark:shadow-[0_0_0_1px_rgb(var(--color-primary-900))]
+                     focus:outline-none focus:shadow-[0_0_0_2px_rgb(var(--color-primary-400))]
+                     dark:focus:shadow-[0_0_0_2px_rgb(var(--color-primary-600))]
+                     transition-shadow" />
                     </div>
 
                     <!-- Senha -->
                     <div>
-                        <label for="password"
-                            class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                        <label for="password" class="block text-sm font-medium mb-1.5
+                             text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]">
                             Senha
                         </label>
                         <div class="relative">
                             <input id="password" v-model="password" :type="showPassword ? 'text' : 'password'" required
                                 :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
-                                placeholder="••••••••" class="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 dark:border-slate-700
-                       bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-50
-                       placeholder:text-slate-400 dark:placeholder:text-slate-500
-                       focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
-                       transition-shadow text-sm" />
-                            <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400
-                       hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                                placeholder="••••••••" class="w-full px-3.5 py-2.5 pr-10 rounded-xl text-sm
+                       bg-[rgb(var(--bg-muted))] dark:bg-[rgb(var(--dark-bg-muted))]
+                       text-[rgb(var(--text-heading))] dark:text-[rgb(var(--dark-text-heading))]
+                       placeholder:text-[rgb(var(--text-muted))] dark:placeholder:text-[rgb(var(--dark-text-muted))]
+                       shadow-[0_0_0_1px_rgb(var(--color-primary-100))] dark:shadow-[0_0_0_1px_rgb(var(--color-primary-900))]
+                       focus:outline-none focus:shadow-[0_0_0_2px_rgb(var(--color-primary-400))]
+                       dark:focus:shadow-[0_0_0_2px_rgb(var(--color-primary-600))]
+                       transition-shadow" />
+                            <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 transition-colors
+                       text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]
+                       hover:text-[rgb(var(--text-heading))] dark:hover:text-[rgb(var(--dark-text-heading))]"
                                 :aria-label="showPassword ? 'Ocultar senha' : 'Mostrar senha'"
                                 @click="showPassword = !showPassword">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -154,10 +164,14 @@ async function handleGoogleLogin() {
                 <!-- Divider -->
                 <div class="relative my-6">
                     <div class="absolute inset-0 flex items-center">
-                        <div class="w-full border-t border-slate-100 dark:border-slate-800" />
+                        <div
+                            class="w-full h-px bg-[rgb(var(--color-primary-100))] dark:bg-[rgb(var(--color-primary-900))]" />
                     </div>
-                    <div class="relative flex justify-center text-xs text-slate-400 dark:text-slate-500">
-                        <span class="bg-white dark:bg-slate-900 px-2">ou continue com</span>
+                    <div class="relative flex justify-center text-xs
+                         text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                        <span class="px-2 bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]">
+                            ou continue com
+                        </span>
                     </div>
                 </div>
 
@@ -177,7 +191,8 @@ async function handleGoogleLogin() {
                 </AppButton>
 
                 <!-- Toggle login/cadastro -->
-                <p class="text-center text-sm text-slate-500 dark:text-slate-400 mt-6">
+                <p class="text-center text-sm mt-6
+                     text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
                     {{ mode === 'login' ? 'Não tem uma conta?' : 'Já tem uma conta?' }}
                     <button data-testid="toggle-auth-mode"
                         class="text-primary-600 dark:text-primary-400 font-medium hover:underline ml-1"

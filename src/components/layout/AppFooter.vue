@@ -1,6 +1,8 @@
 <script setup lang="ts">
 defineProps<{
     appName?: string
+    version?: string
+    status?: 'operational' | 'degraded' | 'outage'
 }>()
 
 const socials = [
@@ -21,23 +23,49 @@ const socials = [
     },
 ]
 
+const statusConfig = {
+    operational: { label: 'Operacional', color: 'bg-emerald-400' },
+    degraded: { label: 'Degradado', color: 'bg-amber-400' },
+    outage: { label: 'Fora do ar', color: 'bg-red-400' },
+}
+
 const year = new Date().getFullYear()
 </script>
 
 <template>
-    <footer class="flex items-center justify-between h-12 px-6 text-xs border-t
+    <footer class="relative z-30 flex items-center justify-between h-11 px-4
          bg-[rgb(var(--bg-surface))] dark:bg-[rgb(var(--dark-bg-surface))]
-         border-[rgb(var(--bg-border))] dark:border-[rgb(var(--dark-bg-border))]
-         text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+         [box-shadow:0_-4px_20px_-4px_rgb(var(--color-primary-300)/30%)]
+         dark:[box-shadow:0_-4px_20px_-4px_rgb(var(--color-primary-950)/70%)]">
 
-        <span>© {{ year }} {{ appName ?? 'Ultimate Starter' }}</span>
+        <!-- Left: copyright + version -->
+        <div class="flex items-center gap-3">
+            <span class="text-[11px] text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                © {{ year }} {{ appName ?? 'Ultimate Starter' }}
+            </span>
+            <span v-if="version" class="hidden sm:inline-flex px-1.5 py-0.5 rounded text-[10px] font-mono font-medium
+                       text-primary-600 dark:text-primary-400
+                       bg-primary-50 dark:bg-primary-950/50">
+                {{ version }}
+            </span>
+        </div>
 
-        <div class="flex items-center gap-1">
+        <!-- Center: status indicator -->
+        <div v-if="status" class="hidden md:flex items-center gap-1.5">
+            <span :class="['w-1.5 h-1.5 rounded-full', statusConfig[status].color]" />
+            <span class="text-[11px] text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]">
+                {{ statusConfig[status].label }}
+            </span>
+        </div>
+
+        <!-- Right: social links -->
+        <div class="flex items-center gap-0.5">
             <a v-for="s in socials" :key="s.label" :href="s.href" :aria-label="s.label" target="_blank"
                 rel="noopener noreferrer" class="p-1.5 rounded-lg transition-colors
-                 hover:bg-[rgb(var(--bg-muted))] dark:hover:bg-[rgb(var(--dark-bg-muted))]
-                 hover:text-[rgb(var(--text-heading))] dark:hover:text-[rgb(var(--dark-text-heading))]">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                     text-[rgb(var(--text-muted))] dark:text-[rgb(var(--dark-text-muted))]
+                     hover:bg-[rgb(var(--bg-muted))] dark:hover:bg-[rgb(var(--dark-bg-muted))]
+                     hover:text-[rgb(var(--text-heading))] dark:hover:text-[rgb(var(--dark-text-heading))]">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path :d="s.icon" />
                 </svg>
             </a>
