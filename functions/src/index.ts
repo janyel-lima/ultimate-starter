@@ -1,32 +1,45 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+// functions/src/index.ts
+import { initializeApp } from 'firebase-admin/app'
+import { getFirestore } from 'firebase-admin/firestore'
+import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 
-import {setGlobalOptions} from "firebase-functions";
-import {onRequest} from "firebase-functions/https";
-import * as logger from "firebase-functions/logger";
+initializeApp()
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+export const notifyOnCriticalError = onDocumentCreated('error_logs/{docId}', async (event) => {
+  const data = event.data?.data()
+  if (!data || data.severity !== 'critical') return
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+  const db = getFirestore()
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+  // Deduplicação: ignora fingerprints repetidos na última hora
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+  const recent = await db
+    .collection('error_notifications_sent')
+    .where('fingerprint', '==', data.fingerprint)
+    .where('sentAt', '>', oneHourAgo)
+    .limit(1)
+    .get()
+
+  if (!recent.empty) return
+
+  await db.collection('error_notifications_sent').add({
+    fingerprint: data.fingerprint,
+    sentAt: new Date(),
+  })
+
+  // Escreve na coleção "mail" — lida pela Extension "Trigger Email"
+  await db.collection('mail').add({
+    to: process.env.ALERT_EMAIL ?? 'voce@exemplo.com',
+    message: {
+      subject: `[CRÍTICO] ${String(data.message).slice(0, 80)}`,
+      html: `
+          <h2>Erro crítico detectado</h2>
+          <p><b>Mensagem:</b> ${data.message}</p>
+          <p><b>Rota:</b> ${data.route ?? '—'}</p>
+          <p><b>Usuário:</b> ${data.userEmail ?? 'anônimo'}</p>
+          <p><b>Browser:</b> ${(data.meta as Record<string, unknown>)?.userAgent ?? '—'}</p>
+          <pre style="font-size:12px">${String(data.stack ?? '').slice(0, 1000)}</pre>
+        `,
+    },
+  })
+})
