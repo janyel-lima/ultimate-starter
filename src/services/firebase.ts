@@ -47,8 +47,9 @@ if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
   connectFirestoreEmulator(db, 'localhost', 8080)
   connectStorageEmulator(storage, 'localhost', 9199)
-
-  console.info('[Firebase] Emulators conectados → Auth:9099 | Firestore:8080 | Storage:9199')
+  console.info('[Firebase] ✅ Emulators conectados')
+} else {
+  console.warn('[Firebase] ⚠️ USANDO PRODUÇÃO — emulator desativado')
 }
 
 // Google provider com prompt de seleção de conta sempre visível
