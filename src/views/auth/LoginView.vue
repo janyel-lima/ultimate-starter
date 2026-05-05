@@ -3,10 +3,11 @@ import AppButton from '@/components/ui/AppButton.vue'
 import { useTheme } from '@/composables/useTheme'
 import { useAuthStore } from '@/stores/auth'
 import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const route = useRoute()
 const { isDark, toggleDark } = useTheme()
 
 const email = ref('')
@@ -86,7 +87,6 @@ function touchAll() {
 }
 
 // ── Ações ─────────────────────────────────────────────────────────────────────
-
 async function handleEmailSubmit() {
     touchAll()
     if (!formValid.value) return
@@ -98,7 +98,8 @@ async function handleEmailSubmit() {
         } else {
             await authStore.register(email.value, password.value)
         }
-        await router.push({ name: 'dashboard' })
+        const redirect = route.query.redirect as string | undefined
+        await router.push(redirect ?? { name: 'dashboard' })
     } catch { /* tratado no store */ } finally {
         isLoading.value = false
     }
@@ -109,7 +110,8 @@ async function handleGoogleLogin() {
     authStore.clearError()
     try {
         await authStore.loginGoogle()
-        await router.push({ name: 'dashboard' })
+        const redirect = route.query.redirect as string | undefined
+        await router.push(redirect ?? { name: 'dashboard' })
     } catch { /* tratado no store */ } finally {
         isLoading.value = false
     }

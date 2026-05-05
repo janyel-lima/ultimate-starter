@@ -37,17 +37,23 @@
     }
   },
   // Adicionadas as portas 8080 (Firestore) e 5001 (Functions)
-  "forwardPorts": [5173, 4173, 9099, 8080, 5001, 4000],
+  "forwardPorts": [5173, 4173, 9099, 8080, 5001, 4000, 9199, 9150, 4500, 4400],
   "portsAttributes": {
     "5173": {
       "label": "Vite Dev Server",
       "onAutoForward": "openBrowser",
       "elevateIfNeeded": true
     },
-    "4173": { "label": "Vite Preview" },
+
+    "4173": { "label": "Vite Preview", "onAutoForward": "openBrowser", "elevateIfNeeded": true },
     "4000": { "label": "Firebase Emulator UI" },
     "9099": { "label": "Auth Emulator" },
-    "8080": { "label": "Firestore Emulator" }
+    "8080": { "label": "Firestore Emulator" },
+    "5001": { "label": "Functions Emulator" },
+    "9199": { "label": "Storage Emulator" },
+    "9150": { "label": "Pub/Sub Emulator" },
+    "4500": { "label": "Database Emulator" },
+    "4400": { "label": "Hosting Emulator" }
   },
   // Instala dependências e garante que o Playwright esteja pronto
   "postCreateCommand": "pnpm install && npx playwright install chromium",

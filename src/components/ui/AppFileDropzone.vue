@@ -1,28 +1,11 @@
 <script setup lang="ts">
-// AppFileDropzone.vue — Área de upload com drag-and-drop, preview de imagem
-// e botão de remoção. Gerencia o input[type=file] internamente.
-//
-// Uso:
-//   <AppFileDropzone
-//     v-model="screenshotFile"
-//     :max-size-bytes="700 * 1024"
-//     accept="image/*"
-//     hint="PNG, JPG, WebP"
-//     @error="msg => formError = msg"
-//   />
-
 import { computed, ref } from 'vue'
 
 interface Props {
-    /** Arquivo selecionado (v-model) */
     modelValue: File | null
-    /** Limite de tamanho em bytes */
     maxSizeBytes?: number
-    /** Tipos aceitos pelo input (ex: "image/*") */
     accept?: string
-    /** Dica exibida na zona de drop (ex: "PNG, JPG, WebP") */
     hint?: string
-    /** Label descritivo do tamanho máximo (ex: "700 KB") */
     maxSizeLabel?: string
 }
 
@@ -42,7 +25,6 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
 const preview = ref<string | null>(null)
 
-// Mantém o preview sincronizado ao resetar o modelValue externamente
 const hasFile = computed(() => props.modelValue !== null)
 
 function readFile(file: File) {
@@ -54,7 +36,6 @@ function readFile(file: File) {
         emit('error', `Imagem deve ter menos de ${props.maxSizeLabel}.`)
         return
     }
-
     const reader = new FileReader()
     reader.onload = (ev) => {
         preview.value = ev.target?.result as string
@@ -80,22 +61,18 @@ function remove() {
     if (fileInputRef.value) fileInputRef.value.value = ''
 }
 
-/** Expõe o preview para o pai (ex: ao enviar o formulário) */
 defineExpose({ preview })
 </script>
 
 <template>
     <div>
-        <!-- Preview -->
         <Transition name="fade-up">
             <div v-if="hasFile && preview"
                 class="relative rounded-xl overflow-hidden mb-2 ring-1 ring-primary-200 dark:ring-primary-800">
                 <img :src="preview" class="w-full max-h-36 object-cover object-top" />
                 <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-
-                <!-- Botão remover -->
                 <button type="button" class="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center
-                 bg-black/50 hover:bg-black/70 text-white transition-colors backdrop-blur-sm"
+                         bg-black/50 hover:bg-black/70 text-white transition-colors backdrop-blur-sm"
                     aria-label="Remover imagem" @click="remove">
                     <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -104,7 +81,6 @@ defineExpose({ preview })
             </div>
         </Transition>
 
-        <!-- Drop zone (só quando não há arquivo) -->
         <div v-if="!hasFile" :class="[
             'relative rounded-xl border-2 border-dashed transition-all duration-200 cursor-pointer group',
             isDragging
@@ -112,6 +88,7 @@ defineExpose({ preview })
                 : 'border-[rgb(var(--color-primary-200))] dark:border-[rgb(var(--color-primary-800))] hover:border-primary-300 dark:hover:border-primary-700',
         ]" @dragover.prevent="isDragging = true" @dragleave.prevent="isDragging = false" @drop.prevent="handleDrop"
             @click="fileInputRef?.click()">
+
             <div class="flex items-center gap-3 py-4 px-4 pointer-events-none">
                 <svg :class="[
                     'w-5 h-5 transition-colors flex-shrink-0',
@@ -133,8 +110,8 @@ defineExpose({ preview })
                 </div>
             </div>
 
-            <input ref="fileInputRef" type="file" :accept="accept"
-                class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" @change="handleChange" />
+            <!-- hidden em vez de absolute overlay — evita double trigger -->
+            <input ref="fileInputRef" type="file" :accept="accept" class="hidden" @change="handleChange" />
         </div>
     </div>
 </template>

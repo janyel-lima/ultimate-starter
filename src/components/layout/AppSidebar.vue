@@ -73,12 +73,14 @@ function isActive(routeName: string) {
 }
 
 function navigate(routeName: string) {
-    // Só navega se a rota existe no router
     const resolved = router.resolve({ name: routeName })
     if (resolved.matched.length > 0) {
         router.push({ name: routeName })
     }
-    emit('close')
+    // Só fecha em mobile — no desktop a sidebar permanece aberta
+    if (window.innerWidth < 1024) {
+        emit('close')
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

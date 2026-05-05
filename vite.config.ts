@@ -2,7 +2,7 @@
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 import { visualizer } from 'rollup-plugin-visualizer'
-import { defineConfig, loadEnv, type UserConfig } from 'vite'
+import { defineConfig, loadEnv, type PluginOption, type UserConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig(({ mode }): UserConfig => {
@@ -22,8 +22,14 @@ export default defineConfig(({ mode }): UserConfig => {
       host: '0.0.0.0',
       port: 5173,
       strictPort: true,
-      // Necessário para o Firebase Auth Emulator funcionar sem CORS
       cors: true,
+      proxy: {
+        '/v0': {
+          target: 'http://127.0.0.1:9199',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
     },
 
     // --- Build ---
@@ -60,6 +66,7 @@ export default defineConfig(({ mode }): UserConfig => {
           name: 'Ultimate Starter',
           short_name: 'Starter',
           description: 'Vue 3 Ultimate Starter Template',
+          id: '/',
           theme_color: '#6366f1',
           background_color: '#ffffff',
           display: 'standalone',
@@ -67,33 +74,64 @@ export default defineConfig(({ mode }): UserConfig => {
           scope: env.VITE_BASE_URL ?? '/',
           start_url: env.VITE_BASE_URL ?? '/',
           icons: [
-            { src: 'icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+            {
+              src: 'icons/icon-192x192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'any',
+            },
             {
               src: 'icons/icon-512x512.png',
               sizes: '512x512',
               type: 'image/png',
-              purpose: 'any maskable',
+              purpose: 'any',
+            },
+            {
+              src: 'icons/icon-512x512-maskable.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
             },
           ],
+          screenshots: [
+            {
+              src: 'screenshots/desktop.png',
+              sizes: '1280x720',
+              type: 'image/png',
+              form_factor: 'wide',
+              label: 'Ultimate Starter Dashboard',
+            },
+            {
+              src: 'screenshots/mobile.png',
+              sizes: '390x844',
+              type: 'image/png',
+              form_factor: 'narrow',
+              label: 'Ultimate Starter Mobile',
+            },
+          ],
+        },
+        devOptions: {
+          enabled: false,
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           cleanupOutdatedCaches: true,
           skipWaiting: true,
           clientsClaim: true,
-          // Não pré-cacheia chunks de análise em prod
           globIgnores: ['**/stats.html'],
-        },
-        devOptions: {
-          enabled: !isProd,
-          type: 'module',
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }) => url.hostname === 'localhost',
+              handler: 'NetworkOnly',
+            },
+          ],
         },
       }),
 
       // Bundle Analyzer — só no modo 'analyze' (pnpm analyze)
       // Gera dist/stats.html com o breakdown visual do bundle
       ...(isAnalyze
-        ? [visualizer({ filename: 'dist/stats.html', open: true, gzipSize: true })]
+        ? [visualizer({ filename: 'dist/stats.html', open: true, gzipSize: true }) as PluginOption]
         : []),
     ],
   }

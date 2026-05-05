@@ -15,8 +15,8 @@
 // no GH Pages. Se o projeto migrar para um servidor com controle
 // de rotas (Vercel, Netlify), basta trocar para createWebHistory.
 // ------------------------------------------------------------
-
 import { useAuthStore } from '@/stores/auth'
+import { watch } from 'vue'
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 const routes: RouteRecordRaw[] = [
@@ -27,25 +27,29 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'login',
-    component: () => import('@/views/LoginView.vue'),
-    // Não entra no login se já está autenticado
+    component: () => import('@/views/auth/LoginView.vue'),
     meta: { requiresGuest: true },
   },
   {
-    path: '/dashboard',
-    name: 'dashboard',
-    component: () => import('@/views/DashboardView.vue'),
-    // Protegida — redireciona para /login se não autenticado
+    // Layout compartilhado — header, sidebar e footer ficam aqui
+    path: '/',
+    component: () => import('@/layouts/AppLayout.vue'),
     meta: { requiresAuth: true },
+    children: [
+      {
+        path: 'dashboard',
+        name: 'dashboard',
+        component: () => import('@/views/app/DashboardView.vue'),
+      },
+      {
+        path: 'suporte',
+        name: 'suporte',
+        component: () => import('@/views/app/SupportView.vue'),
+      },
+      // adiciona novas rotas autenticadas aqui
+    ],
   },
   {
-    path: '/suporte',
-    name: 'suporte',
-    component: () => import('@/views/SupportView.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    // Catch-all: rota não encontrada
     path: '/:pathMatch(.*)*',
     redirect: '/login',
   },
@@ -61,12 +65,22 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const authStore = useAuthStore()
 
-  // NÃO chama init() de novo — apenas espera se ainda está carregando
-  // O init() já foi chamado (e aguardado) em main.ts antes do mount
-  // Se loading ainda for true aqui, algo deu errado; prossiga como não autenticado
+  if (authStore.loading) {
+    await new Promise<void>((resolve) => {
+      const stop = watch(
+        () => authStore.loading,
+        (loading) => {
+          if (!loading) {
+            stop()
+            resolve()
+          }
+        }
+      )
+    })
+  }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return { name: 'login' }
+    return { name: 'login', query: { redirect: to.fullPath } }
   }
 
   if (to.meta.requiresGuest && authStore.isAuthenticated) {

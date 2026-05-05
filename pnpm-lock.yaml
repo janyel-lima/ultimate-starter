@@ -23,6 +23,9 @@ importers:
       vue-router:
         specifier: ^4.6.4
         version: 4.6.4(vue@3.5.33(typescript@5.9.3))
+      vue-virtual-scroller:
+        specifier: ^3.0.2
+        version: 3.0.2(vue@3.5.33(typescript@5.9.3))
       workbox-window:
         specifier: ^7.4.0
         version: 7.4.0
@@ -3523,6 +3526,11 @@ packages:
     resolution: {integrity: sha512-Hz9q5sa33Yhduglwz6g9skT8OBPii+4bFn88w6J+J4MfEo4KRRpmiNG/hHHkdbRFlLBOqxN8y8gf2Fb0MTUgVg==}
     peerDependencies:
       vue: ^3.5.0
+
+  vue-virtual-scroller@3.0.2:
+    resolution: {integrity: sha512-zneKxsBecfFBpH2NAk8zF0IWBRSYRaXnXK/dPQ/AnXE9xlbRyW6sSO9EUb5L5cSFz2Dpfb2giN30/y+/Xvu5PQ==}
+    peerDependencies:
+      vue: ^3.3.0
 
   vue@3.5.33:
     resolution: {integrity: sha512-1AgChhx5w3ALgT4oK3acm2Es/7jyZhWSVUfs3rOBlGQC0rjEDkS7G4lWlJJGGNQD+BV3reCwbQrOe1mPNwKHBQ==}
@@ -7583,6 +7591,10 @@ snapshots:
   vue-router@4.6.4(vue@3.5.33(typescript@5.9.3)):
     dependencies:
       '@vue/devtools-api': 6.6.4
+      vue: 3.5.33(typescript@5.9.3)
+
+  vue-virtual-scroller@3.0.2(vue@3.5.33(typescript@5.9.3)):
+    dependencies:
       vue: 3.5.33(typescript@5.9.3)
 
   vue@3.5.33(typescript@5.9.3):

@@ -1,5 +1,5 @@
 # .devcontainer/Dockerfile
-FROM node:20-bullseye-slim
+FROM node:24-bullseye-slim
 
 # 1. Instala ferramentas básicas e dependências do sistema
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -50,8 +50,8 @@ function toggle() {
                     : 'bg-[rgb(var(--color-primary-200))] dark:bg-[rgb(var(--color-primary-800))]',
             ]" @click="toggle">
             <span :class="[
-                'absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform duration-200',
-                modelValue ? 'translate-x-4' : 'translate-x-0.5',
+                'absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-all duration-200',
+                modelValue ? 'translate-x-4' : 'translate-x-0',
             ]" />
         </button>
 

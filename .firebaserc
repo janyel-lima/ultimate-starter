@@ -1,7 +1,6 @@
 {
   "projects": {
-    "default": "ultimae-starter",
-    "ultstarter": "ultimae-starter"
+    "ultimate-starter": "ultimate-starter"
   },
   "targets": {},
   "etags": {}
